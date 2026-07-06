@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fee2e2" />
+      <stop offset="100%" stop-color="#ffd1d1" />
+    </linearGradient>
+    <linearGradient id="gum" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fca5a5" />
+      <stop offset="100%" stop-color="#e11d48" /> <!-- slightly redder gums -->
+    </linearGradient>
+    <linearGradient id="teethGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#fef3c7" />
+    </linearGradient>
+  </defs>
+
+  <rect width="600" height="400" fill="url(#bg)" rx="24" />
+  <path d="M 100 200 Q 300 80 500 200 Q 300 320 100 200 Z" fill="#4c0519" />
+  <path d="M 100 200 Q 300 100 500 200 Q 300 140 100 200 Z" fill="url(#gum)" />
+
+  <g id="top-teeth" transform="translate(0, -5)">
+    <!-- Canine Left (High ectopic fang) -->
+    <path d="M 170 145 C 165 115, 195 110, 190 155 C 185 175, 172 170, 170 145 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1.5" />
+    <!-- Lateral incisor Left -->
+    <path d="M 195 168 C 200 140, 230 135, 232 172 C 228 190, 195 188, 195 168 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1.5" transform="rotate(-12, 215, 168)" />
+    <!-- Central Left (Overlapping forward) -->
+    <path d="M 235 175 C 240 135, 285 140, 280 182 C 275 198, 235 195, 235 175 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1.5" />
+    <!-- Central Right (Pushed backward) -->
+    <path d="M 285 168 C 288 140, 325 142, 320 172 C 315 188, 285 188, 285 168 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1.5" transform="rotate(8, 305, 168)" />
+    <!-- Lateral incisor Right -->
+    <path d="M 322 165 C 325 135, 355 135, 352 165 C 348 185, 322 185, 322 165 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1.5" />
+    <!-- Canine Right (Ectopic fang) -->
+    <path d="M 365 140 C 370 110, 395 115, 390 150 C 385 170, 365 170, 365 140 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1.5" />
+  </g>
+
+  <path d="M 100 200 Q 300 300 500 200 Q 300 260 100 200 Z" fill="url(#gum)" />
+
+  <g id="bottom-teeth" transform="translate(0, 5)">
+    <path d="M 195 230 C 195 250, 225 250, 220 230 C 218 215, 195 215, 195 230 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1" />
+    <path d="M 220 228 C 223 252, 248 248, 245 226 C 242 212, 220 214, 220 228 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1" transform="rotate(10, 232, 228)" />
+    <path d="M 246 226 C 248 250, 278 250, 274 224 C 270 210, 246 210, 246 226 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1" transform="rotate(-8, 260, 226)" />
+    <path d="M 276 222 C 278 244, 305 244, 302 221 C 298 208, 276 208, 276 222 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1" />
+    <path d="M 304 227 C 306 248, 332 248, 330 227 C 328 214, 304 214, 304 227 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1" />
+    <path d="M 332 230 C 334 250, 360 250, 358 230 C 356 216, 332 216, 332 230 Z" fill="url(#teethGrad)" stroke="#b45309" stroke-width="1" />
+  </g>
+
+  <rect x="235" y="340" width="130" height="30" rx="15" fill="#f87171" />
+  <text x="300" y="359" font-family="sans-serif" font-size="12" font-weight="900" fill="#ffffff" text-anchor="middle">قبل از درمان (ارتودنسی)</text>
+</svg>

@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "ClinicState": {
+      "title": "Clinic State",
+      "description": "The complete state of the dental clinic application",
+      "type": "object",
+      "properties": {
+        "bookings": { "type": "array" },
+        "blogPosts": { "type": "array" },
+        "patients": { "type": "array" },
+        "transactions": { "type": "array" },
+        "clinicConfig": { "type": "object" },
+        "services": { "type": "array" },
+        "aiConfig": { "type": "object" },
+        "adminCredentials": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "clinic/state": {
+      "schema": "ClinicState",
+      "description": "Global clinic database state document"
+    }
+  }
+}

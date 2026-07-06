@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e2f1e9" />
+      <stop offset="100%" stop-color="#c2e5d3" />
+    </linearGradient>
+    <linearGradient id="gum" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fda4af" />
+      <stop offset="100%" stop-color="#f43f5e" />
+    </linearGradient>
+    <linearGradient id="teethGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f5f5f5" />
+    </linearGradient>
+  </defs>
+
+  <rect width="600" height="400" fill="url(#bg)" rx="24" />
+  <path d="M 100 200 Q 300 80 500 200 Q 300 320 100 200 Z" fill="#4c0519" />
+  <path d="M 100 200 Q 300 100 500 200 Q 300 140 100 200 Z" fill="url(#gum)" />
+
+  <g id="top-teeth" transform="translate(0, -5)">
+    <path d="M 180 160 C 180 135, 210 135, 210 162 C 210 185, 180 185, 180 160 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 210 162 C 210 135, 240 135, 240 165 C 240 188, 210 188, 210 162 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <!-- Center Tooth Left (Slightly wider to close gap) -->
+    <path d="M 240 165 C 240 133, 300 133, 300 168 C 300 193, 240 193, 240 165 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1.2" />
+    <!-- Center Tooth Right (Slightly wider to close gap) -->
+    <path d="M 300 168 C 300 133, 360 133, 360 165 C 360 193, 300 193, 300 168 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1.2" />
+    <path d="M 360 165 C 360 135, 390 135, 390 162 C 390 188, 360 188, 360 165 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 390 162 C 390 135, 420 135, 420 160 C 420 185, 390 185, 390 162 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+  </g>
+
+  <path d="M 100 200 Q 300 300 500 200 Q 300 260 100 200 Z" fill="url(#gum)" />
+
+  <g id="bottom-teeth" transform="translate(0, 5)">
+    <path d="M 195 230 C 195 248, 222 248, 222 230 C 222 214, 195 214, 195 230 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 222 230 C 222 248, 249 248, 249 230 C 249 214, 222 214, 222 230 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 249 230 C 249 248, 276 248, 276 230 C 276 214, 249 214, 249 230 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 276 230 C 276 248, 303 248, 303 230 C 303 214, 276 214, 276 230 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 303 230 C 303 248, 330 248, 330 230 C 330 214, 303 214, 303 230 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+    <path d="M 330 230 C 330 248, 357 248, 357 230 C 357 214, 330 214, 330 230 Z" fill="url(#teethGrad)" stroke="#0f766e" stroke-width="1" />
+  </g>
+
+  <rect x="235" y="340" width="130" height="30" rx="15" fill="#0d9488" />
+  <text x="300" y="359" font-family="sans-serif" font-size="12" font-weight="900" fill="#ffffff" text-anchor="middle">بعد از درمان (کامپوزیت)</text>
+</svg>
