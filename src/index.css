@@ -49,3 +49,147 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* ==========================================
+   HIGH-CONTRAST DARK THEME (CASCADE DECORATORS)
+   ========================================== */
+
+/* Target either the body.dark, documentElement.dark, or #main-container.dark */
+.dark,
+#main-container.dark {
+  background-color: #030712 !important; /* Pure Slate 950 */
+  color: #f8fafc !important; /* Slate 50 */
+}
+
+/* Outer document background */
+html.dark {
+  background-color: #030712 !important;
+}
+
+/* Cards, boxes, and sections */
+#main-container.dark .bg-white,
+#main-container.dark .bg-white\/80,
+#main-container.dark .bg-white\/90,
+#main-container.dark .bg-white\/95,
+#main-container.dark .bg-white\/45,
+#main-container.dark .bg-white\/75,
+#main-container.dark .bg-slate-50,
+#main-container.dark .bg-slate-100 {
+  background-color: #111827 !important; /* Cool Gray 900 for high-contrast cards */
+  color: #f9fafb !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+#main-container.dark .glassmorphism {
+  background: rgba(17, 24, 39, 0.9) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Text overrides for maximum readability (High-Contrast) */
+#main-container.dark .text-slate-900,
+#main-container.dark .text-slate-800,
+#main-container.dark .text-slate-700,
+#main-container.dark .text-gray-900,
+#main-container.dark .text-gray-800,
+#main-container.dark .text-gray-700 {
+  color: #ffffff !important;
+}
+
+#main-container.dark .text-slate-600,
+#main-container.dark .text-slate-500,
+#main-container.dark .text-gray-600,
+#main-container.dark .text-gray-500 {
+  color: #cbd5e1 !important; /* Slate 300 */
+}
+
+#main-container.dark .text-teal-950,
+#main-container.dark .text-teal-900,
+#main-container.dark .text-teal-800,
+#main-container.dark .text-teal-700 {
+  color: #2dd4bf !important; /* Teal 400 for dark mode highlights */
+}
+
+/* Interactive elements & menus */
+#main-container.dark nav a,
+#main-container.dark header a {
+  color: #cbd5e1 !important;
+}
+
+#main-container.dark nav a:hover,
+#main-container.dark header a:hover {
+  color: #2dd4bf !important;
+}
+
+#main-container.dark nav a.text-teal-600,
+#main-container.dark header a.text-teal-600 {
+  color: #2dd4bf !important;
+}
+
+/* Borders */
+#main-container.dark .border,
+#main-container.dark .border-slate-100,
+#main-container.dark .border-slate-150,
+#main-container.dark .border-slate-200,
+#main-container.dark .border-slate-300,
+#main-container.dark .border-white\/20,
+#main-container.dark .border-white\/50,
+#main-container.dark .border-white\/60 {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+/* Badges and tags */
+#main-container.dark .bg-teal-50,
+#main-container.dark .bg-teal-100\/50,
+#main-container.dark .bg-teal-50\/80 {
+  background-color: rgba(20, 184, 166, 0.15) !important;
+  color: #2dd4bf !important;
+  border-color: rgba(20, 184, 166, 0.3) !important;
+}
+
+#main-container.dark .bg-rose-50,
+#main-container.dark .bg-rose-100\/50 {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  color: #fda4af !important;
+  border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+/* Form fields, inputs, and controls */
+#main-container.dark input,
+#main-container.dark select,
+#main-container.dark textarea {
+  background-color: #1f2937 !important; /* Gray 800 */
+  color: #ffffff !important;
+  border-color: #4b5563 !important; /* Gray 600 */
+}
+
+#main-container.dark input::placeholder,
+#main-container.dark textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Buttons with white backgrounds */
+#main-container.dark button.bg-white,
+#main-container.dark a.bg-white {
+  background-color: #1f2937 !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Table elements in admin dashboard or lists */
+#main-container.dark th {
+  background-color: #1f2937 !important;
+  color: #ffffff !important;
+}
+
+#main-container.dark tr:hover {
+  background-color: #1f2937 !important;
+}
+
+/* Scrollbar tracks for dark mode */
+#main-container.dark ::-webkit-scrollbar-track {
+  background: #111827 !important;
+}
+
+#main-container.dark ::-webkit-scrollbar-thumb {
+  background: #374151 !important;
+}
+

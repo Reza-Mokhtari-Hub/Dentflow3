@@ -162,6 +162,7 @@ ${clinicConfig.phone}
       }
 
       setChatMessages(prev => [...prev, { role: "model" as const, text: data.text }]);
+      setIsChatLoading(false);
     } catch (err: any) {
       console.warn("Backend Chat failed, falling back to local rule-based AI:", err);
       // Simulate typing speed for better UI feel
@@ -170,10 +171,6 @@ ${clinicConfig.phone}
         setChatMessages(prev => [...prev, { role: "model" as const, text: fallbackText }]);
         setIsChatLoading(false);
       }, 700);
-      return; // prevent setting loading to false immediately
-    } finally {
-      // only runs if not caught by timeout local simulation
-      setIsChatLoading(false);
     }
   };
 

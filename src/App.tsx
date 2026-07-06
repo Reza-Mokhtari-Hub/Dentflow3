@@ -53,6 +53,9 @@ import AdminPanel from "./components/AdminPanel";
 export default function App() {
   // Navigation states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(() => {
+    return localStorage.getItem("df_dark_theme") === "true";
+  });
   const [activeSection, setActiveSection] = useState("home");
   const [isScrolled, setIsScrolled] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string>("implant");
@@ -325,33 +328,36 @@ export default function App() {
 
   useEffect(() => {
     if (!sharedStateLoaded) return;
-
-    const syncSharedState = async () => {
-      try {
-        await fetch("/api/clinic-state", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${adminToken}`
-          },
-          body: JSON.stringify({
-            patients,
-            transactions,
-            blogPosts: articles,
-            adminCredentials: { username: storedAdminUsername },
-            clinicConfig,
-            services,
-            aiConfig: { name: aiName, greeting: aiGreeting, prompt: aiPrompt },
-            testimonials,
-          }),
-        });
-      } catch (error) {
-        console.warn("Unable to sync clinic state to the server.", error);
-      }
-    };
-
     if (!adminToken) return;
-    void syncSharedState();
+
+    const handler = setTimeout(() => {
+      const syncSharedState = async () => {
+        try {
+          await fetch("/api/clinic-state", {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${adminToken}`
+            },
+            body: JSON.stringify({
+              patients,
+              transactions,
+              blogPosts: articles,
+              adminCredentials: { username: storedAdminUsername },
+              clinicConfig,
+              services,
+              aiConfig: { name: aiName, greeting: aiGreeting, prompt: aiPrompt },
+              testimonials,
+            }),
+          });
+        } catch (error) {
+          console.warn("Unable to sync clinic state to the server.", error);
+        }
+      };
+      void syncSharedState();
+    }, 1000);
+
+    return () => clearTimeout(handler);
   }, [sharedStateLoaded, patients, transactions, articles, storedAdminUsername, clinicConfig, services, aiName, aiGreeting, aiPrompt, testimonials, adminToken]);
 
   useEffect(() => {
@@ -359,6 +365,20 @@ export default function App() {
       localStorage.setItem("df_local_articles", JSON.stringify(articles));
     }
   }, [articles, useLocalDb]);
+
+  useEffect(() => {
+    const root = document.getElementById("main-container");
+    if (root) {
+      if (isDarkTheme) {
+        root.classList.add("dark");
+        document.documentElement.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+        document.documentElement.classList.remove("dark");
+      }
+    }
+    localStorage.setItem("df_dark_theme", isDarkTheme ? "true" : "false");
+  }, [isDarkTheme]);
 
   // Client-side local DB initial data
   const getLocalBookings = () => {
@@ -637,7 +657,22 @@ export default function App() {
 
               {/* CTA Actions */}
               <div className="hidden sm:flex items-center gap-4" id="header-cta-block">
-                <a href={`tel:${clinicConfig.phoneRaw}`} className="hidden md:flex items-center gap-2 text-sm text-slate-600 hover:text-teal-600 transition-colors font-bold">
+                <button
+                  onClick={() => setIsDarkTheme(!isDarkTheme)}
+                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-yellow-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  title={isDarkTheme ? "حالت روشن" : "حالت تاریک"}
+                >
+                  {isDarkTheme ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+                <a href={`tel:${clinicConfig.phoneRaw}`} className="hidden md:flex items-center gap-2 text-sm text-slate-600 hover:text-teal-600 transition-colors font-bold font-sans">
                   <Phone className="w-4 h-4 text-teal-500" />
                   <span>{clinicConfig.phone.split(" | ")[0]}</span>
                 </a>
@@ -646,10 +681,27 @@ export default function App() {
                 </a>
               </div>
 
-              {/* Mobile Hamburger */}
-              <button className="lg:hidden p-2 rounded-lg text-slate-600 hover:text-teal-600 hover:bg-slate-100 transition-colors" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
+              {/* Mobile Actions */}
+              <div className="flex items-center gap-2 lg:hidden" id="mobile-header-actions">
+                <button
+                  onClick={() => setIsDarkTheme(!isDarkTheme)}
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-yellow-400 hover:bg-slate-50 transition-colors"
+                  title={isDarkTheme ? "حالت روشن" : "حالت تاریک"}
+                >
+                  {isDarkTheme ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
+                <button className="p-2 rounded-lg text-slate-600 hover:text-teal-600 hover:bg-slate-100 transition-colors" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                  {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                </button>
+              </div>
 
             </div>
           </div>
@@ -993,6 +1045,28 @@ export default function App() {
           </div>
         </footer>
       )}
+
+      {/* Floating Theme Switcher Button */}
+      <button
+        onClick={() => setIsDarkTheme(prev => !prev)}
+        className="fixed bottom-6 left-6 z-50 p-3.5 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center border hover:scale-110 active:scale-95 bg-white dark:bg-slate-900 text-slate-800 dark:text-yellow-400 border-slate-200 dark:border-slate-800 shadow-teal-950/10 dark:shadow-black/50 group cursor-pointer"
+        aria-label="تغییر پوسته کاربری"
+        title={isDarkTheme ? "پوسته روشن" : "پوسته تیره کنتراست بالا"}
+        id="theme-toggle-floating"
+      >
+        {isDarkTheme ? (
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+          </svg>
+        ) : (
+          <svg className="w-6 h-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        )}
+        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-out font-bold text-xs whitespace-nowrap pr-0 group-hover:pr-2 text-slate-800 dark:text-yellow-400">
+          {isDarkTheme ? "حالت روشن" : "حالت تاریک"}
+        </span>
+      </button>
 
     </div>
   );
