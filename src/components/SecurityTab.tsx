@@ -132,6 +132,18 @@ export default function SecurityTab({
         </p>
       </div>
 
+      <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="border-b border-slate-200 pb-3 flex items-center gap-2">
+          <svg className="w-5 h-5 text-rose-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+          </svg>
+          <h4 className="text-sm font-black text-slate-800">وضعیت ایمیل اطلاع‌رسانی (SMTP)</h4>
+        </div>
+        <p className="text-xs font-semibold text-slate-600">
+          برای ارسال خودکار ایمیل‌ها به مراجعین (مانند تایید نوبت یا فاکتورها)، شما باید متغیرهای سیستمی <code className="bg-slate-200 px-1 py-0.5 rounded">GMAIL_USER</code> و <code className="bg-slate-200 px-1 py-0.5 rounded">GMAIL_PASS</code> را در تنظیمات پلتفرم وارد نمایید (استفاده از App Password جیمیل پیشنهاد می‌شود).
+        </p>
+      </div>
+
       <div className="max-w-xl mx-auto bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-6">
         <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
           <Key className="w-5 h-5 text-teal-600" />

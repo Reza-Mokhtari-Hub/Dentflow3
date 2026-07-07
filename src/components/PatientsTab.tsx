@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { 
   FolderHeart, 
   Search, 
@@ -12,9 +12,10 @@ import {
   Camera,
   UploadCloud,
   Trash2,
-  Image
+  Image,
+  Mail
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 
 interface PatientsTabProps {
   patients: any[];
@@ -42,6 +43,7 @@ interface PatientsTabProps {
   patientsSearch: string;
   setPatientsSearch: (val: string) => void;
   clinicConfig: any;
+  adminToken: string | null;
 }
 
 export default function PatientsTab({
@@ -89,6 +91,48 @@ export default function PatientsTab({
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+
+  const sendCustomEmail = async () => {
+    if (!activePatient || !activePatient.email) return;
+    setEmailSending(true);
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          to: activePatient.email,
+          subject: emailSubject,
+          body: `<div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px;">
+                  <h2>سلام ${activePatient.fullName} عزیز،</h2>
+                  <p>${emailBody.replace(/\n/g, '<br/>')}</p>
+                  <hr style="border: 1px solid #eee; margin: 20px 0;"/>
+                  <p style="font-size: 12px; color: #777;">با تشکر،<br/>کلینیک دنت فلو</p>
+                </div>`
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert("ایمیل با موفقیت ارسال شد.");
+        setIsEmailModalOpen(false);
+        setEmailSubject("");
+        setEmailBody("");
+      } else {
+        alert(data.error || "خطا در ارسال ایمیل.");
+      }
+    } catch (err) {
+      alert("خطا در برقراری ارتباط با سرور.");
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   return (
@@ -148,7 +192,7 @@ export default function PatientsTab({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-slate-500 font-bold block">شماره تماس:</label>
                   <input
@@ -161,6 +205,20 @@ export default function PatientsTab({
                   />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-slate-500 font-bold block">ایمیل (جهت ارسال نسخه/فاکتور):</label>
+                  <input
+                    type="email"
+                    value={newPatientForm.email || ""}
+                    onChange={(e) => setNewPatientForm({ ...newPatientForm, email: e.target.value })}
+                    placeholder="user@example.com"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-mono text-left"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
                   <label className="text-slate-500 font-bold block">کد ملی:</label>
                   <input
                     type="text"
@@ -171,9 +229,6 @@ export default function PatientsTab({
                     dir="ltr"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-slate-500 font-bold block">سن بیمار (سال):</label>
                   <input
@@ -183,17 +238,6 @@ export default function PatientsTab({
                     placeholder="32"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-800"
                   />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-500 font-bold block">جنسیت:</label>
-                  <select
-                    value={newPatientForm.gender}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, gender: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-800 text-right"
-                  >
-                    <option value="female">زن</option>
-                    <option value="male">مرد</option>
-                  </select>
                 </div>
               </div>
 
@@ -216,6 +260,19 @@ export default function PatientsTab({
                   </select>
                 </div>
                 <div className="space-y-1">
+                  <label className="text-slate-500 font-bold block">جنسیت:</label>
+                  <select
+                    value={newPatientForm.gender}
+                    onChange={(e) => setNewPatientForm({ ...newPatientForm, gender: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-800 text-right"
+                  >
+                    <option value="female">زن</option>
+                    <option value="male">مرد</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
                   <label className="text-slate-500 font-bold block">تاریخچه پزشکی / حساسیت:</label>
                   <input
                     type="text"
@@ -224,7 +281,6 @@ export default function PatientsTab({
                     placeholder="مثال: دیابت - حساسیت به آسپرین"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold text-slate-800"
                   />
-                </div>
               </div>
 
               <button
@@ -242,6 +298,7 @@ export default function PatientsTab({
                     id: pId,
                     fullName: newPatientForm.fullName,
                     phone: newPatientForm.phone,
+                    email: newPatientForm.email || "",
                     nationalId: newPatientForm.nationalId || "---",
                     age: parseInt(newPatientForm.age) || 30,
                     gender: newPatientForm.gender,
@@ -354,6 +411,77 @@ export default function PatientsTab({
                   <span className="text-rose-700 font-extrabold block">پیشینه پزشکی و حساسیت‌های دارویی (EHR Sensitivities):</span>
                   <p className="text-slate-600 font-bold mt-1 leading-relaxed">{activePatient.history}</p>
                 </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      if (!activePatient.email) {
+                        alert("ایمیلی برای این بیمار ثبت نشده است. لطفاً ابتدا در قسمت اطلاعات بیمار، ایمیل را وارد کنید.");
+                        return;
+                      }
+                      setIsEmailModalOpen(!isEmailModalOpen);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-extrabold text-xs transition-colors flex items-center gap-1.5 cursor-pointer w-full sm:w-auto justify-center"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>ارسال ایمیل به بیمار (نسخه/فاکتور/پیام دلخواه)</span>
+                  </button>
+                </div>
+
+                {/* Inline Email Form */}
+                {isEmailModalOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="border-t border-slate-100 pt-4 mt-2 text-right space-y-4"
+                  >
+                    <div className="space-y-1 text-xs">
+                      <label className="text-slate-500 font-bold block">موضوع پیام:</label>
+                      <input
+                        type="text"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        placeholder="مثال: فاکتور هزینه درمان - کلینیک دنت فلو"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-white text-slate-800 font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-1 text-xs">
+                      <label className="text-slate-500 font-bold block">متن کامل پیام (نسخه، هزینه یا یادآوری):</label>
+                      <textarea
+                        value={emailBody}
+                        onChange={(e) => setEmailBody(e.target.value)}
+                        placeholder="جناب آقای / سرکار خانم ...&#10;بدینوسیله فاکتور/نسخه شما ارسال می‌گردد."
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-white resize-none text-slate-700 font-semibold leading-relaxed"
+                        rows={5}
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-end text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEmailModalOpen(false);
+                          setEmailSubject("");
+                          setEmailBody("");
+                        }}
+                        className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold cursor-pointer transition-colors"
+                      >
+                        انصراف
+                      </button>
+                      <button
+                        type="button"
+                        disabled={emailSending || !emailSubject || !emailBody}
+                        onClick={sendCustomEmail}
+                        className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold cursor-pointer transition-colors flex items-center gap-1.5 shadow-md shadow-blue-600/10 disabled:opacity-50"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>{emailSending ? "در حال ارسال..." : "ارسال پیام و اطلاع‌رسانی"}</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Dental Chart Component */}

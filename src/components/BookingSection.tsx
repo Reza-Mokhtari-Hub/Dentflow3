@@ -16,6 +16,8 @@ interface BookingSectionProps {
     doctorTitle: string;
     aboutDesc: string;
     installmentInfo: string;
+    shiftMorningName?: string;
+    shiftAfternoonName?: string;
   };
 }
 
@@ -26,6 +28,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
+    email: "",
     serviceId: "implant",
     date: "",
     timeSlot: "morning",
@@ -238,6 +241,21 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" id="form-row-2">
+                      {/* Email Input */}
+                      <div className="space-y-1.5" id="form-group-email">
+                        <label htmlFor="email" className="block text-xs sm:text-sm font-bold text-slate-700">ایمیل (اختیاری جهت اطلاع‌رسانی)</label>
+                        <div className="relative" id="email-input-wrapper">
+                          <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="مثال: user@example.com"
+                            value={formData.email}
+                            onChange={handleFormChange}
+                            className={`w-full px-4 py-3 rounded-xl bg-[#F8FCFC] border border-slate-200 focus:border-teal-500 focus:ring-teal-500 text-slate-800 text-sm focus:outline-none focus:ring-2`}
+                          />
+                        </div>
+                      </div>
                       {/* Select treatment dropdown */}
                       <div className="space-y-1.5" id="form-group-service">
                         <label htmlFor="serviceId" className="block text-xs sm:text-sm font-bold text-slate-700">نوع خدمت درخواستی</label>
@@ -286,7 +304,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                             onChange={() => setFormData(prev => ({ ...prev, timeSlot: "morning" }))}
                             className="hidden"
                           />
-                          <span>شیفت صبح (۱۰ الی ۱۴)</span>
+                          <span>{clinicConfig.shiftMorningName || "شیفت صبح"}</span>
                         </label>
                         <label className={`flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer text-xs sm:text-sm font-bold transition-all ${formData.timeSlot === "afternoon" ? "bg-teal-50 border-teal-300 text-teal-700 shadow-inner" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"}`} id="label-time-afternoon">
                           <input 
@@ -297,7 +315,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                             onChange={() => setFormData(prev => ({ ...prev, timeSlot: "afternoon" }))}
                             className="hidden"
                           />
-                          <span>شیفت عصر (۱۴ الی ۲۰)</span>
+                          <span>{clinicConfig.shiftAfternoonName || "شیفت عصر"}</span>
                         </label>
                       </div>
                     </div>
@@ -529,7 +547,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                       <div className="space-y-1">
                         <span className="text-slate-400 text-[10px] sm:text-xs block">زمان/شیفت نوبت:</span>
                         <span className="text-slate-900 block">
-                          {trackedBooking.timeSlot === "morning" ? "شیفت صبح (۱۰ الی ۱۴)" : "شیفت عصر (۱۴ الی ۲۰)"}
+                          {trackedBooking.timeSlot === "morning" ? (clinicConfig.shiftMorningName || "شیفت صبح") : (clinicConfig.shiftAfternoonName || "شیفت عصر")}
                         </span>
                       </div>
                     </div>

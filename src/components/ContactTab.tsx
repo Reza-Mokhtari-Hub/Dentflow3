@@ -11,6 +11,10 @@ interface ClinicConfig {
   address: string;
   aboutDesc: string;
   installmentInfo: string;
+  shiftMorningName?: string;
+  shiftMorningCapacity?: number;
+  shiftAfternoonName?: string;
+  shiftAfternoonCapacity?: number;
 }
 
 interface ContactMessage {
@@ -377,7 +381,51 @@ export default function ContactTab({
             />
           </div>
 
-          <div className="pt-2 flex justify-end">
+          <div className="pt-4 pb-2 border-b border-slate-100 flex items-center gap-2 text-indigo-700">
+            <CheckSquare className="w-5 h-5" />
+            <h4 className="font-extrabold text-sm">تنظیمات نوبت‌دهی و شیفت‌ها</h4>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1">
+              <label className="text-slate-500 font-bold block">نام شیفت اول (مثلاً: شیفت صبح):</label>
+              <input
+                type="text"
+                value={clinicConfig.shiftMorningName || "شیفت صبح"}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, shiftMorningName: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-slate-500 font-bold block">ظرفیت پذیرش شیفت اول (نفر در روز):</label>
+              <input
+                type="number"
+                value={clinicConfig.shiftMorningCapacity || 10}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, shiftMorningCapacity: parseInt(e.target.value) || 0 })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-800 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-slate-500 font-bold block">نام شیفت دوم (مثلاً: شیفت عصر):</label>
+              <input
+                type="text"
+                value={clinicConfig.shiftAfternoonName || "شیفت عصر"}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, shiftAfternoonName: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-slate-500 font-bold block">ظرفیت پذیرش شیفت دوم (نفر در روز):</label>
+              <input
+                type="number"
+                value={clinicConfig.shiftAfternoonCapacity || 10}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, shiftAfternoonCapacity: parseInt(e.target.value) || 0 })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-800 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-end">
             <button
               onClick={() => {
                 localStorage.setItem("df_clinic_config", JSON.stringify(clinicConfig));

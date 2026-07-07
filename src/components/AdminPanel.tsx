@@ -260,6 +260,8 @@ export default function AdminPanel({
             updateBookingDetails={updateBookingDetails}
             deleteBooking={deleteBooking}
             refreshBookings={fetchAdminBookings}
+            adminToken={adminToken}
+            clinicConfig={clinicConfig}
           />
         )}
 
@@ -290,6 +292,7 @@ export default function AdminPanel({
             patientsSearch={patientsSearch}
             setPatientsSearch={setPatientsSearch}
             clinicConfig={clinicConfig}
+            adminToken={adminToken}
           />
         )}
 

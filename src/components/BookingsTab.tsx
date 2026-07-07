@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Calendar, Edit3, Check, X, Trash2, Save, RefreshCw } from "lucide-react";
+import { Calendar, Edit3, Check, X, Trash2, Save, RefreshCw, Mail } from "lucide-react";
 
 interface Booking {
   id: string;
   fullName: string;
   phone: string;
+  email?: string;
   serviceId: string;
   date: string;
   timeSlot: "morning" | "afternoon";
@@ -41,6 +42,8 @@ interface BookingsTabProps {
   updateBookingDetails: (id: string, details: { date: string; timeSlot: "morning" | "afternoon"; adminComment: string }) => void;
   deleteBooking: (id: string) => void;
   refreshBookings: () => void;
+  adminToken: string | null;
+  clinicConfig: any;
 }
 
 export default function BookingsTab({
@@ -54,7 +57,9 @@ export default function BookingsTab({
   updateBookingStatus,
   updateBookingDetails,
   deleteBooking,
-  refreshBookings
+  refreshBookings,
+  adminToken,
+  clinicConfig
 }: BookingsTabProps) {
   // Editing state local to BookingsTab
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
@@ -62,8 +67,50 @@ export default function BookingsTab({
   const [editTimeSlot, setEditTimeSlot] = useState<"morning" | "afternoon">("morning");
   const [editAdminComment, setEditAdminComment] = useState("");
 
+  const [activeEmailId, setActiveEmailId] = useState<string | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+
   const getServiceTitle = (srvId: string) => {
     return services.find((s) => s.id === srvId)?.title || srvId;
+  };
+
+  const sendCustomEmail = async (booking: Booking) => {
+    if (!booking.email) return;
+    setEmailSending(true);
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          to: booking.email,
+          subject: emailSubject,
+          body: `<div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px;">
+                  <h2>سلام ${booking.fullName} عزیز،</h2>
+                  <p>${emailBody.replace(/\n/g, '<br/>')}</p>
+                  <hr style="border: 1px solid #eee; margin: 20px 0;"/>
+                  <p style="font-size: 12px; color: #777;">با تشکر،<br/>کلینیک دنت فلو</p>
+                </div>`
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert("ایمیل با موفقیت ارسال شد.");
+        setActiveEmailId(null);
+        setEmailSubject("");
+        setEmailBody("");
+      } else {
+        alert(data.error || "خطا در ارسال ایمیل.");
+      }
+    } catch (err) {
+      alert("خطا در برقراری ارتباط با سرور.");
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   return (
@@ -193,7 +240,7 @@ export default function BookingsTab({
                         </div>
                         <div>
                           <span className="text-slate-400 font-bold block text-[11px]">تاریخ و شیفت:</span>
-                          <span className="font-bold text-slate-800 block mt-0.5">{b.date} ({b.timeSlot === "morning" ? "شیفت صبح" : "شیفت عصر"})</span>
+                          <span className="font-bold text-slate-800 block mt-0.5">{b.date} ({b.timeSlot === "morning" ? (clinicConfig?.shiftMorningName || "شیفت صبح") : (clinicConfig?.shiftAfternoonName || "شیفت عصر")})</span>
                         </div>
                       </div>
 
@@ -229,6 +276,17 @@ export default function BookingsTab({
                           <Edit3 className="w-3.5 h-3.5 text-slate-500" />
                           <span>ویرایش نوبت</span>
                         </button>
+
+                        {b.email && (
+                          <button
+                            id={`btn-email-trigger-${b.id}`}
+                            onClick={() => setActiveEmailId(b.id)}
+                            className="px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-extrabold text-xs transition-colors flex items-center gap-1 w-full sm:w-auto justify-center cursor-pointer"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>ارسال ایمیل</span>
+                          </button>
+                        )}
 
                         {b.status !== "approved" && (
                           <button
@@ -297,8 +355,8 @@ export default function BookingsTab({
                             onChange={(e) => setEditTimeSlot(e.target.value as "morning" | "afternoon")}
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-extrabold text-slate-800"
                           >
-                            <option value="morning">شیفت صبح (۱۰ الی ۱۴)</option>
-                            <option value="afternoon">شیفت عصر (۱۴ الی ۲۰)</option>
+                            <option value="morning">{clinicConfig?.shiftMorningName || "شیفت صبح"}</option>
+                            <option value="afternoon">{clinicConfig?.shiftAfternoonName || "شیفت عصر"}</option>
                           </select>
                         </div>
                       </div>
@@ -314,7 +372,7 @@ export default function BookingsTab({
                         />
                       </div>
 
-                      <div className="flex gap-2 justify-end text-xs">
+                      <div className="flex flex-wrap gap-2 justify-end text-xs">
                         <button
                           type="button"
                           onClick={() => setActiveEditingId(null)}
@@ -332,10 +390,87 @@ export default function BookingsTab({
                             });
                             setActiveEditingId(null);
                           }}
-                          className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold cursor-pointer transition-colors flex items-center gap-1 shadow-md shadow-teal-600/10"
+                          className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-extrabold cursor-pointer transition-colors shadow-md shadow-slate-800/10"
                         >
-                          <Save className="w-3.5 h-3.5" />
-                          <span>ثبت و ذخیره تغییرات</span>
+                          فقط ذخیره تغییرات
+                        </button>
+                        {b.status !== "approved" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateBookingDetails(b.id, {
+                                date: editDate,
+                                timeSlot: editTimeSlot,
+                                adminComment: editAdminComment,
+                                status: "approved"
+                              });
+                              setActiveEditingId(null);
+                            }}
+                            className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold cursor-pointer transition-colors flex items-center gap-1 shadow-md shadow-teal-600/10"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>ثبت تغییرات و تایید نهایی نوبت (ارسال ایمیل)</span>
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {activeEmailId === b.id && b.email && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="border-t border-slate-100 pt-4 mt-4 text-right space-y-4"
+                      id={`email-panel-${b.id}`}
+                    >
+                      <div className="flex items-center gap-2 text-blue-600 font-extrabold text-xs">
+                        <Mail className="w-4 h-4" />
+                        <span>ارسال ایمیل مستقیم به بیمار (فاکتور، نسخه، اطلاع‌رسانی)</span>
+                      </div>
+
+                      <div className="space-y-1 text-xs">
+                        <label className="text-slate-500 font-bold block">موضوع ایمیل:</label>
+                        <input
+                          type="text"
+                          value={emailSubject}
+                          onChange={(e) => setEmailSubject(e.target.value)}
+                          placeholder="مثال: فاکتور هزینه درمان - دنت فلو"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-white text-slate-800 font-bold"
+                        />
+                      </div>
+
+                      <div className="space-y-1 text-xs">
+                        <label className="text-slate-500 font-bold block">متن ایمیل:</label>
+                        <textarea
+                          value={emailBody}
+                          onChange={(e) => setEmailBody(e.target.value)}
+                          placeholder="متن پیام خود را بنویسید..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-white resize-none text-slate-700 font-semibold"
+                          rows={4}
+                        />
+                      </div>
+
+                      <div className="flex gap-2 justify-end text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveEmailId(null);
+                            setEmailSubject("");
+                            setEmailBody("");
+                          }}
+                          className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold cursor-pointer transition-colors"
+                        >
+                          انصراف
+                        </button>
+                        <button
+                          type="button"
+                          disabled={emailSending || !emailSubject || !emailBody}
+                          onClick={() => sendCustomEmail(b)}
+                          className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold cursor-pointer transition-colors flex items-center gap-1 shadow-md shadow-blue-600/10 disabled:opacity-50"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>{emailSending ? "در حال ارسال..." : "ارسال پیام"}</span>
                         </button>
                       </div>
                     </motion.div>

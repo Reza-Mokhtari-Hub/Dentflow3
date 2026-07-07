@@ -5,13 +5,16 @@ import { createHash, randomUUID } from "crypto";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
+import nodemailer from "nodemailer";
 
 dotenv.config();
+
 
 interface Booking {
   id: string;
   fullName: string;
   phone: string;
+  email?: string;
   serviceId: string;
   date: string;
   timeSlot: "morning" | "afternoon";
@@ -524,7 +527,11 @@ const defaultClinicState: ClinicDataState = {
     doctorName: "دکتر مختاری",
     doctorTitle: "جراح و دندانپزشک زیبایی - فلوشیپ ایمپلنتولوژی دیجیتال از سوئیس",
     aboutDesc: "هدف ما در دنت فلو برطرف کردن ترس‌ها و دغدغه‌های همیشگی شما از دندانپزشکی است. ما معتقدیم کیفیت و دقت در درمان حق بیمار است و با گردهم‌آوری بهترین متخصصان، به کارگیری فناوری سه‌بعدی دیجیتال و دکوراسیون پزشکی آرامش‌بخش، فضایی رویایی برای درمان به وجود آورده‌ایم.",
-    installmentInfo: "۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود"
+    installmentInfo: "۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود",
+    shiftMorningName: "شیفت صبح",
+    shiftMorningCapacity: 10,
+    shiftAfternoonName: "شیفت عصر / بعد از ظهر",
+    shiftAfternoonCapacity: 10
   },
   services: defaultServices,
   aiConfig: {
@@ -795,6 +802,34 @@ async function persistState() {
 
 // Session authentication management
 const activeSessions = new Map<string, string>(); // token -> username
+
+async function sendEmail(to: string, subject: string, body: string) {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+    console.warn("GMAIL_USER or GMAIL_PASS environment variables are missing, cannot send email.");
+    return false;
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
+      to,
+      subject,
+      html: body,
+    });
+    console.log(`Email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    return false;
+  }
+}
 
 function createAdminSession(username: string): string {
   const token = randomUUID();
@@ -1098,10 +1133,20 @@ export async function createExpressApp() {
 
   // API Route: Create new booking
   app.post("/api/bookings", async (req, res) => {
-    const { fullName, phone, serviceId, date, timeSlot, notes } = req.body;
+    const { fullName, phone, email, serviceId, date, timeSlot, notes } = req.body;
 
     if (!fullName || !phone || !date) {
       return res.status(400).json({ error: "نام، شماره تلفن و تاریخ الزامی هستند." });
+    }
+
+    // Check shift capacity
+    const isMorning = timeSlot === "morning";
+    const capacityLimit = isMorning ? clinicConfig.shiftMorningCapacity : clinicConfig.shiftAfternoonCapacity;
+    const existingBookingsCount = bookings.filter(b => b.date === date && b.timeSlot === timeSlot && b.status !== "cancelled").length;
+
+    if (existingBookingsCount >= capacityLimit) {
+      const shiftName = isMorning ? clinicConfig.shiftMorningName : clinicConfig.shiftAfternoonName;
+      return res.status(400).json({ error: `ظرفیت نوبت‌های ${shiftName} برای این روز تکمیل شده است.` });
     }
 
     const newId = "DF-" + Math.floor(100000 + Math.random() * 900000);
@@ -1109,6 +1154,7 @@ export async function createExpressApp() {
       id: newId,
       fullName,
       phone,
+      email: email || "",
       serviceId: serviceId || "implant",
       date,
       timeSlot: timeSlot || "morning",
@@ -1170,6 +1216,8 @@ export async function createExpressApp() {
       return res.status(404).json({ error: "نوبت پیدا نشد." });
     }
 
+    const previousStatus = bookings[bookingIndex].status;
+
     if (status) {
       bookings[bookingIndex].status = status;
     }
@@ -1184,6 +1232,34 @@ export async function createExpressApp() {
     }
     if (timeSlot) {
       bookings[bookingIndex].timeSlot = timeSlot;
+    }
+
+    // Send email if status changed to approved and email exists
+    if (status === "approved" && previousStatus !== "approved" && bookings[bookingIndex].email) {
+      const shiftName = bookings[bookingIndex].timeSlot === "morning" ? (clinicConfig.shiftMorningName || "شیفت صبح") : (clinicConfig.shiftAfternoonName || "شیفت عصر");
+      const emailHtml = `
+        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px;">
+          <h2>سلام ${bookings[bookingIndex].fullName} عزیز،</h2>
+          <p>نوبت شما در کلینیک دندانپزشکی دنت فلو <b>تایید شد</b>.</p>
+          <p><b>تاریخ نوبت:</b> ${bookings[bookingIndex].date}</p>
+          <p><b>زمان:</b> ${shiftName}</p>
+          ${bookings[bookingIndex].adminComment ? `<p><b>پیام کلینیک:</b> ${bookings[bookingIndex].adminComment}</p>` : ""}
+          <hr style="border: 1px solid #eee; my: 20px;"/>
+          <p style="font-size: 12px; color: #777;">با تشکر،<br/>کلینیک دنت فلو</p>
+        </div>
+      `;
+      sendEmail(bookings[bookingIndex].email!, "✅ نوبت شما در دنت فلو تایید شد", emailHtml);
+    } else if (status === "cancelled" && previousStatus !== "cancelled" && bookings[bookingIndex].email) {
+      const emailHtml = `
+        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px;">
+          <h2>سلام ${bookings[bookingIndex].fullName} عزیز،</h2>
+          <p>متاسفانه نوبت شما در تاریخ ${bookings[bookingIndex].date} در کلینیک دنت فلو لغو شد.</p>
+          <p>لطفاً برای هماهنگی مجدد با ما تماس بگیرید.</p>
+          <hr style="border: 1px solid #eee; my: 20px;"/>
+          <p style="font-size: 12px; color: #777;">با تشکر،<br/>کلینیک دنت فلو</p>
+        </div>
+      `;
+      sendEmail(bookings[bookingIndex].email!, "❌ لغو نوبت در دنت فلو", emailHtml);
     }
 
     await persistState();
@@ -1202,6 +1278,24 @@ export async function createExpressApp() {
 
     await persistState();
     res.json({ success: true, message: "نوبت با موفقیت حذف شد." });
+  });
+
+  // API Route: Send custom email
+  app.post("/api/send-email", authenticateAdmin, async (req, res) => {
+    try {
+      const { to, subject, body } = req.body;
+      if (!to || !subject || !body) {
+        return res.status(400).json({ error: "گیرنده، موضوع و متن پیام الزامی است." });
+      }
+      const success = await sendEmail(to, subject, body);
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(500).json({ error: "خطا در ارسال ایمیل. مطمئن شوید که اکانت جیمیل به درستی متصل شده است." });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "خطا در ارسال ایمیل." });
+    }
   });
 
   // API Route: Submit new contact message
