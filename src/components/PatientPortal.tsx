@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { toast } from "../lib/toast";
 import { 
   User, 
   Mail, 
@@ -14,7 +15,8 @@ import {
   Sparkles,
   Stethoscope,
   Info,
-  Send
+  Send,
+  Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -32,6 +34,61 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
   const [patientData, setPatientData] = useState<any>(null);
   const [patientMsg, setPatientMsg] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Polling for new messages
+  useEffect(() => {
+    let interval: any;
+    if (patientData && email) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/patient/chat/${encodeURIComponent(email)}`);
+          if (res.ok) {
+            const data = await res.json();
+            // Only update if chat length or content changed to avoid excessive re-renders
+            if (JSON.stringify(data.chat) !== JSON.stringify(patientData.chat)) {
+              setPatientData((prev: any) => ({ ...prev, chat: data.chat }));
+            }
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 10000); // 10 seconds
+    }
+    return () => clearInterval(interval);
+  }, [patientData, email]);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewComment.trim()) return;
+    setSubmittingReview(true);
+    try {
+      const res = await fetch("/api/patient/submit-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          name: patientData.fullName, 
+          rating: reviewRating, 
+          comment: reviewComment,
+          treatment: patientData.treatmentPlan && patientData.treatmentPlan.length > 0 ? patientData.treatmentPlan[0].title : ""
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "نظر شما با موفقیت ثبت شد و پس از تایید نمایش داده می‌شود.");
+        setReviewComment("");
+        setReviewRating(5);
+      } else {
+        toast.error("خطا در ثبت نظر.");
+      }
+    } catch (err) {
+      toast.error("خطا در برقراری ارتباط.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +102,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
       });
       const data = await res.json();
       if (res.ok) {
-        alert("پیام شما با موفقیت به کلینیک ارسال شد.");
+        toast.success("پیام شما با موفقیت به کلینیک ارسال شد.");
         setPatientMsg("");
         // Update local chat history
         if (data.newMessage) {
@@ -55,10 +112,10 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
           }));
         }
       } else {
-        alert("خطا در ارسال پیام.");
+        toast.error("خطا در ارسال پیام.");
       }
     } catch (err) {
-      alert("خطا در برقراری ارتباط.");
+      toast.error("خطا در برقراری ارتباط.");
     } finally {
       setSendingMsg(false);
     }
@@ -537,6 +594,43 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                         پاسخ شما در اسرع وقت توسط تیم پشتیبانی یا پزشک داده خواهد شد.
                       </p>
                     </div>
+                  </section>
+
+                  {/* Submit Review */}
+                  <section className="bg-amber-50 rounded-3xl p-6 border border-amber-100 mb-8">
+                    <h3 className="font-black text-amber-800 flex items-center gap-2 mb-4 text-sm">
+                      <Sparkles className="w-5 h-5" />
+                      <span>ثبت نظر و تجربه درمان</span>
+                    </h3>
+                    <form onSubmit={handleSubmitReview} className="space-y-4">
+                      <div className="flex items-center gap-2 justify-center py-2 bg-white rounded-2xl border border-amber-200">
+                        {[1, 2, 3, 4, 5].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setReviewRating(num)}
+                            className="p-1 focus:outline-none transition-transform hover:scale-110 cursor-pointer border-none bg-transparent"
+                          >
+                            <Star 
+                              className={`w-8 h-8 ${num <= reviewRating ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} 
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="تجربه خود را از حضور در کلینیک بنویسید..."
+                        className="w-full px-4 py-3 rounded-2xl border border-amber-200 bg-white font-bold text-slate-700 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                        rows={3}
+                      />
+                      <button
+                        disabled={submittingReview || !reviewComment.trim()}
+                        className="w-full py-3 rounded-2xl bg-amber-500 text-white font-black text-xs hover:bg-amber-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50 border-none cursor-pointer shadow-lg shadow-amber-500/20"
+                      >
+                        <span>{submittingReview ? "در حال ثبت..." : "ثبت و ارسال نظر"}</span>
+                      </button>
+                    </form>
                   </section>
                 </div>
               </div>

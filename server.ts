@@ -175,9 +175,10 @@ const defaultPatients = [
         diagnosis: "عفونت لثه اطراف دندان ۱۳"
       }
     ],
-    messageHistory: [
-      { id: 1, date: "1405/04/10", subject: "نوبت فردا", body: "یادآوری نوبت معاینه فردا ساعت ۱۰ صبح" }
-    ]
+    chat: [
+      { id: 1, date: "1405/04/10", time: "10:30", sender: "clinic", subject: "نوبت فردا", text: "یادآوری نوبت معاینه فردا ساعت ۱۰ صبح", status: "read" }
+    ],
+    notes: "بیمار به پنی‌سیلین حساسیت دارد. در تجویز داروها دقت شود."
   },
   {
     id: "P-102",
@@ -198,7 +199,9 @@ const defaultPatients = [
       { id: 1, title: "۲ واحد ایمپلنت دیجیتال سوئیسی دندان ۳ و ۴", cost: 19000000, status: "in_progress" },
       { id: 2, title: "عصب‌کشی و روکش دندان ۳۰ و ۳۱", cost: 8600000, status: "planned" }
     ],
-    prescriptions: []
+    prescriptions: [],
+    chat: [],
+    notes: "بیمار سابقه فشار خون دارد. فشار خون قبل از جراحی چک شود."
   },
   {
     id: "P-103",
@@ -218,7 +221,9 @@ const defaultPatients = [
     treatmentPlan: [
       { id: 1, title: "۱۰ واحد کامپوزیت زیبایی IPS فک بالا", cost: 28000000, status: "completed" }
     ],
-    prescriptions: []
+    prescriptions: [],
+    chat: [],
+    notes: "بیمار از نتیجه کامپوزیت بسیار راضی است."
   }
 ];
 
@@ -1009,6 +1014,34 @@ export async function createExpressApp() {
     });
   });
 
+  // API Route: Update testimonial status
+  app.put("/api/testimonials/:id", authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const index = testimonials.findIndex(t => t.id === Number(id));
+      if (index === -1) return res.status(404).json({ error: "دیدگاه یافت نشد." });
+
+      testimonials[index].status = status;
+      await persistState();
+      res.json(testimonials[index]);
+    } catch (error) {
+      res.status(500).json({ error: "خطا در به‌روزرسانی دیدگاه." });
+    }
+  });
+
+  // API Route: Delete testimonial
+  app.delete("/api/testimonials/:id", authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      testimonials = testimonials.filter(t => t.id !== Number(id));
+      await persistState();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "خطا در حذف دیدگاه." });
+    }
+  });
+
   // API Route: Synchronize complete state (protected)
   app.post("/api/clinic-state", authenticateAdmin, async (req, res) => {
     try {
@@ -1132,54 +1165,11 @@ export async function createExpressApp() {
       return res.status(500).json({ error: error.message || "An error occurred during generating content." });
     }
   });
-
-  // API Route: Get all bookings
-  app.get("/api/bookings", (req, res) => {
-    res.json(bookings);
-  });
-
-  // API Route: Create new booking
-  app.post("/api/bookings", async (req, res) => {
-    const { fullName, phone, email, serviceId, date, timeSlot, notes } = req.body;
-
-    if (!fullName || !phone || !date) {
-      return res.status(400).json({ error: "نام، شماره تلفن و تاریخ الزامی هستند." });
-    }
-
-    // Check shift capacity
-    const isMorning = timeSlot === "morning";
-    const capacityLimit = isMorning ? clinicConfig.shiftMorningCapacity : clinicConfig.shiftAfternoonCapacity;
-    const existingBookingsCount = bookings.filter(b => b.date === date && b.timeSlot === timeSlot && b.status !== "cancelled").length;
-
-    if (existingBookingsCount >= capacityLimit) {
-      const shiftName = isMorning ? clinicConfig.shiftMorningName : clinicConfig.shiftAfternoonName;
-      return res.status(400).json({ error: `ظرفیت نوبت‌های ${shiftName} برای این روز تکمیل شده است.` });
-    }
-
-    const newId = "DF-" + Math.floor(100000 + Math.random() * 900000);
-    const newBooking: Booking = {
-      id: newId,
-      fullName,
-      phone,
-      email: email || "",
-      serviceId: serviceId || "implant",
-      date,
-      timeSlot: timeSlot || "morning",
-      notes: notes || "",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      adminComment: ""
-    };
-
-    bookings.unshift(newBooking);
-    await persistState();
-    res.status(201).json(newBooking);
-  });
-
+  
   // API Route: Track booking by ID
-  app.get("/api/bookings/track/:id", (req, res) => {
+  app.get("/api/bookings/track/:id", async (req, res) => {
     const { id } = req.params;
-    const booking = bookings.find(b => b.id.toUpperCase() === id.trim().toUpperCase());
+    const booking = bookings.find(b => b.id === id);
     if (!booking) {
       return res.status(404).json({ error: "نوبتی با این کد رهگیری یافت نشد." });
     }
@@ -1339,6 +1329,25 @@ export async function createExpressApp() {
       };
 
       messages.unshift(newMessage);
+
+      // Link to patient chat if patient exists
+      const patient = patients.find(p => 
+        (p.phone && p.phone.replace(/[\s\-\(\)\+]/g, "") === phone.replace(/[\s\-\(\)\+]/g, "")) ||
+        (p.email && p.email.toLowerCase() === (req.body.email || "").toLowerCase())
+      );
+
+      if (patient) {
+        if (!patient.chat) patient.chat = [];
+        patient.chat.unshift({
+          id: Date.now(),
+          date: new Date().toLocaleDateString("fa-IR"),
+          time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
+          sender: "patient",
+          text: `[پیام از فرم تماس]: ${message}`,
+          status: "unread"
+        });
+      }
+
       await persistState();
       res.status(201).json(newMessage);
     } catch (error: any) {
@@ -1492,57 +1501,59 @@ export async function createExpressApp() {
     res.json({ success: true, message: "مقاله با موفقیت حذف شد." });
   });
 
-  // API Route: Generate article with Gemini
+  // API Route: Generate or Refine article content with Gemini
   app.post("/api/articles/generate", async (req, res) => {
     try {
-      const { topic, category } = req.body;
-
-      if (!topic || !category) {
-        return res.status(400).json({ error: "موضوع و دسته‌بندی مقاله الزامی هستند." });
-      }
+      const { topic, category, existingContent, mode, tone, length } = req.body;
 
       if (!process.env.GEMINI_API_KEY) {
+        // Mock response if no API key
+        if (mode === "refine") {
+          return res.json({ content: (existingContent || "") + "\n\n[متن توسط هوش مصنوعی بهبود یافت - شبیه‌سازی]" });
+        }
         return res.json({
-          title: `راهنمای جامع ${topic} در دندانپزشکی مدرن`,
-          excerpt: `در این مقاله تخصصی به بررسی علمی و همه‌جانبه موضوع ${topic} پرداخته و بهترین روش‌ها و تکنیک‌های روز دنیا برای دسته‌بندی ${category} را با هم بررسی می‌کنیم.`,
-          category: category,
-          readTime: "مطالعه ۶ دقیقه",
+          title: `راهنمای جامع ${topic || "موضوع جدید"}`,
+          excerpt: "خلاصه تولید شده توسط هوش مصنوعی (شبیه‌سازی)",
+          category: category || "عمومی",
+          readTime: "مطالعه ۵ دقیقه",
           imageUrl: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=600&auto=format&fit=crop",
-          content: `## راهنمای جامع و کاربردی: ${topic}
-
-موضوع **${topic}** یکی از موارد پربحث و کلیدی در دنیای دندانپزشکی امروز است. چه به عنوان بیمار و چه به عنوان یک علاقه‌مند به سلامت دهان و دندان، آگاهی از این موضوع می‌تواند به شما در تصمیم‌گیری‌های درمانی بهتر و ارتقای سلامت فردی کمک کند.
-
-در این مقاله تخصصی که در بخش **${category}** دنت فلو تهیه شده، جزئیات مهمی را با هم بررسی خواهیم کرد.
-
-### چرا این موضوع اهمیت ویژه‌ای دارد؟
-هرگونه اقدام در راستای دندانپزشکی مدرن نیازمند درک درست از روندها، عوارض احتمالی و راهکارهای درمانی است. موضوع ${topic} به طور مستقیم با کیفیت درمان و میزان رضایت شما از لبخندتان در ارتباط است.
-
-### ۳ نکته طلایی که باید در نظر داشته باشید:
-۱. **مشاوره با متخصص:** همیشه اولین قدم، ارزیابی دقیق توسط دندانپزشک مجرب است.
-۲. **استفاده از تکنولوژی‌های روز:** روش‌های دیجیتال و پیشرفته، زمان درمان را کاهش و دقت را افزایش می‌دهند.
-۳. **مراقبت‌های مداوم:** هیچ درمانی بدون بهداشت منظم دهان و دندان پایدار نخواهد بود.
-
-### نتیجه‌گیری و گام‌های بعدی
-اگر مایلید در مورد ${topic} اطلاعات شخصی‌سازی شده‌تری دریافت کنید، می‌توانید همین امروز از طریق پنل رزرواسیون کلینیک دنت فلو، نوبت مشاوره خود را ثبت کنید. متخصصین ما آماده پاسخگویی به سوالات شما هستند.`
+          content: "محتوای تولید شده توسط هوش مصنوعی (شبیه‌سازی)"
         });
       }
 
-      const prompt = `یک مقاله علمی، کاملاً تخصصی، بسیار جذاب و مفید برای وبلاگ یک کلینیک دندانپزشکی پیشرفته با موضوع "${topic}" بنویس.
+      let prompt = "";
+      if (mode === "refine") {
+        prompt = `تو یک ویراستار حرفه‌ای هستی. متن زیر را که مربوط به یک کلینیک دندانپزشکی است، بازنویسی و اصلاح کن تا حرفه‌ای‌تر، جذاب‌تر و علمی‌تر به نظر برسد. 
+لحن متن باید ${tone === "friendly" ? "دوستانه" : tone === "simple" ? "ساده و روان" : "علمی و تخصصی"} باشد.
+خروجی باید فقط شامل متن اصلاح شده باشد و هیچ توضیح اضافه‌ای نده.
+
+متن فعلی:
+${existingContent}`;
+      } else if (mode === "continue") {
+        prompt = `متن زیر ناتمام است. بر اساس محتوای موجود، آن را به شکلی منطقی و جذاب ادامه بده و به پایان برسان.
+موضوع: ${topic || "دندانپزشکی"}
+متن موجود:
+${existingContent}`;
+      } else {
+        // Original generation mode
+        prompt = `یک مقاله علمی، کاملاً تخصصی، بسیار جذاب و مفید برای وبلاگ یک کلینیک دندانپزشکی پیشرفته با موضوع "${topic}" بنویس.
 این مقاله متعلق به دسته‌بندی "${category}" است.
+لحن: ${tone || "تخصصی"}، طول: ${length || "متوسط"}.
 خروجی باید حتماً به صورت یک شیء JSON با ساختار زیر باشد و هیچ متنی به جز JSON در خروجی نباشد:
 {
   "title": "یک عنوان جذاب، علمی و بسیار باکلاس به زبان فارسی",
   "excerpt": "یک خلاصه ترغیب‌کننده و جامع از مقاله شامل حداقل ۳ جمله کامل به زبان فارسی که کاربر را به خواندن کل مطلب تشویق کند",
   "category": "${category}",
-  "readTime": "مدت زمان تقریبی مطالعه بر حسب دقیقه به فارسی، برای مثال: مطالعه ۶ دقیقه",
-  "imageUrl": "یک آدرس تصویر بسیار باکیفیت و جذاب مرتبط با دندانپزشکی یا موضوع مقاله از Unsplash (مانند عکس‌های تجهیزات دندانپزشکی، لبخند، پزشک و غیره)",
-  "content": "کل متن مقاله به صورت کامل، مفصل و ساختاریافته در قالب فرمت استاندارد Markdown به زبان فارسی. شامل بخش‌های مقدمه جذاب، چندین تیتر فرعی (###)، لیست‌های بالت‌دار یا شماره‌دار، نقل قول یا هشدارها (با استفاده از >)، و بخش نتیجه‌گیری کاربردی باشد. متن باید بسیار پرمحتوا، آموزنده و دندانپزشک‌پسند باشد."
+  "readTime": "مدت زمان تقریبی مطالعه بر حسب دقیقه به فارسی",
+  "imageUrl": "یک آدرس تصویر باکیفیت از Unsplash مرتبط",
+  "content": "کل متن مقاله به صورت کامل در قالب فرمت HTML (فقط از تگ‌های h2, h3, p, ul, li, strong استفاده کن) به زبان فارسی."
 }`;
+      }
 
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
-        config: {
+        config: mode === "refine" || mode === "continue" ? undefined : {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -1555,20 +1566,20 @@ export async function createExpressApp() {
               content: { type: Type.STRING }
             },
             required: ["title", "excerpt", "category", "readTime", "imageUrl", "content"]
-          },
-          temperature: 0.8
+          }
         }
       });
 
-      const responseText = response.text || "";
-      const generated = JSON.parse(responseText.trim());
-      return res.json(generated);
-    } catch (error: any) {
-      console.error("Gemini Generate Article Error:", error);
-      return res.status(500).json({ error: error.message || "خطا در تولید محتوای مقاله با هوش مصنوعی." });
+      if (mode === "refine" || mode === "continue") {
+        res.json({ content: response.text });
+      } else {
+        res.json(JSON.parse(response.text || "{}"));
+      }
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      res.status(500).json({ error: "خطا در تولید محتوا با هوش مصنوعی." });
     }
   });
-
   // --- PATIENT PORTAL API ---
 
   // 1. Request Login Code
@@ -1682,6 +1693,90 @@ export async function createExpressApp() {
     } catch (error: any) {
       console.error("Send message error:", error);
       res.status(500).json({ error: "خطا در ارسال پیام." });
+    }
+  });
+
+  // 4. Doctor sends message to patient via chat (Internal)
+  app.post("/api/admin/send-chat", authenticateAdmin, async (req, res) => {
+    try {
+      const { patientId, message } = req.body;
+      if (!patientId || !message) return res.status(400).json({ error: "شناسه بیمار و متن پیام الزامی است." });
+
+      const patient = patients.find(p => p.id === patientId);
+      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
+
+      if (!patient.chat) patient.chat = [];
+      
+      const newMsg = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString("fa-IR"),
+        time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
+        sender: "clinic",
+        text: message,
+        status: "read"
+      };
+
+      patient.chat.unshift(newMsg);
+
+      await persistState();
+      res.json({ success: true, newMessage: newMsg });
+    } catch (error: any) {
+      console.error("Admin send chat error:", error);
+      res.status(500).json({ error: "خطا در ارسال پیام." });
+    }
+  });
+
+  // 5. Fetch single patient chat history (for polling/refresh)
+  app.get("/api/patient/chat/:email", async (req, res) => {
+    try {
+      const { email } = req.params;
+      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
+      res.json({ chat: patient.chat || [] });
+    } catch (error) {
+      res.status(500).json({ error: "خطا در دریافت تاریخچه گفتگو." });
+    }
+  });
+
+  // 6. Patient submits a review/testimonial
+  app.post("/api/patient/submit-review", async (req, res) => {
+    try {
+      const { name, rating, comment, treatment } = req.body;
+      if (!name || !rating || !comment) return res.status(400).json({ error: "تمامی موارد الزامی هستند." });
+
+      const newReview = {
+        id: Date.now(),
+        name,
+        treatment: treatment || "خدمات کلینیک",
+        rating: Number(rating),
+        comment,
+        avatarUrl: `/images/avatar-default.svg`,
+        status: "pending"
+      };
+
+      testimonials.unshift(newReview);
+      await persistState();
+      res.json({ success: true, message: "نظر شما با موفقیت ثبت شد و پس از تایید مدیریت نمایش داده خواهد شد." });
+    } catch (error) {
+      res.status(500).json({ error: "خطا در ثبت نظر." });
+    }
+  });
+
+  // 7. Mark messages as read
+  app.post("/api/admin/mark-chat-read", authenticateAdmin, async (req, res) => {
+    try {
+      const { patientId } = req.body;
+      const patient = patients.find(p => p.id === patientId);
+      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
+      
+      if (patient.chat) {
+        patient.chat = patient.chat.map((msg: any) => ({ ...msg, status: "read" }));
+      }
+      
+      await persistState();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "خطا در بروزرسانی وضعیت پیام‌ها." });
     }
   });
 

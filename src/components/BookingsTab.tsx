@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { toast } from "../lib/toast";
 import { motion, AnimatePresence } from "motion/react";
 import { Calendar, Edit3, Check, X, Trash2, Save, RefreshCw, Mail } from "lucide-react";
 
@@ -99,15 +100,15 @@ export default function BookingsTab({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert("ایمیل با موفقیت ارسال شد.");
+        toast.success("ایمیل با موفقیت ارسال شد.");
         setActiveEmailId(null);
         setEmailSubject("");
         setEmailBody("");
       } else {
-        alert(data.error || "خطا در ارسال ایمیل.");
+        toast.error(data.error || "خطا در ارسال ایمیل.");
       }
     } catch (err) {
-      alert("خطا در برقراری ارتباط با سرور.");
+      toast.error("خطا در برقراری ارتباط با سرور.");
     } finally {
       setEmailSending(false);
     }

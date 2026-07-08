@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "../lib/toast";
 import { CheckCircle, Search, User, Phone, Lock, Check, AlertCircle, MapPin, Clock, Map, Info, FolderHeart, Camera } from "lucide-react";
 import { Service } from "../data";
 import { AnimatePresence, motion } from "motion/react";
@@ -107,7 +108,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
         setBookingRef(data.id || data.refCode || `DF-${Math.floor(100000 + Math.random() * 900000)}`);
         setIsSubmitted(true);
       } else {
-        alert(data.error || "ثبت نوبت با خطا مواجه شد.");
+        toast.error(data.error || "ثبت نوبت با خطا مواجه شد.");
       }
     } catch (err) {
       console.error("Booking Error:", err);

@@ -14,22 +14,75 @@ interface Testimonial {
 interface ReviewsTabProps {
   testimonials: Testimonial[];
   setTestimonials: React.Dispatch<React.SetStateAction<Testimonial[]>>;
+  adminToken: string | null;
 }
 
-export default function ReviewsTab({ testimonials, setTestimonials }: ReviewsTabProps) {
+export default function ReviewsTab({ testimonials, setTestimonials, adminToken }: ReviewsTabProps) {
   const [filter, setFilter] = useState<"all" | "pending" | "approved">("all");
+  const [loading, setLoading] = useState<number | null>(null);
 
-  const handleApprove = (id: number) => {
-    setTestimonials(prev => prev.map(t => t.id === id ? { ...t, status: "approved" } : t));
+  const handleApprove = async (id: number) => {
+    setLoading(id);
+    try {
+      const res = await fetch(`/api/testimonials/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ status: "approved" })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setTestimonials(prev => prev.map(t => t.id === id ? updated : t));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(null);
+    }
   };
 
-  const handleReject = (id: number) => {
-    setTestimonials(prev => prev.map(t => t.id === id ? { ...t, status: "pending" } : t));
+  const handleReject = async (id: number) => {
+    setLoading(id);
+    try {
+      const res = await fetch(`/api/testimonials/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ status: "pending" })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setTestimonials(prev => prev.map(t => t.id === id ? updated : t));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(null);
+    }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (window.confirm("آیا از حذف این دیدگاه مطمئن هستید؟")) {
-      setTestimonials(prev => prev.filter(t => t.id !== id));
+      setLoading(id);
+      try {
+        const res = await fetch(`/api/testimonials/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${adminToken}`
+          }
+        });
+        if (res.ok) {
+          setTestimonials(prev => prev.filter(t => t.id !== id));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(null);
+      }
     }
   };
 

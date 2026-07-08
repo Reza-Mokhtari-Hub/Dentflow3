@@ -1,4 +1,5 @@
 import React from "react";
+import { toast } from "../lib/toast";
 import { 
   DollarSign, 
   Plus, 
@@ -64,7 +65,7 @@ export default function BillingTab({
 
   const handleAddTransaction = () => {
     if (!newTxForm.amount || !newTxForm.description) {
-      alert("لطفاً مبلغ و شرح تراکنش را وارد فرمایید.");
+      toast.error("لطفاً مبلغ و شرح تراکنش را وارد فرمایید.");
       return;
     }
     const amountNum = parseInt(newTxForm.amount) || 0;
@@ -87,13 +88,13 @@ export default function BillingTab({
       patientId: ""
     });
     setIsAddingTransaction(false);
-    alert("سند حسابداری با موفقیت به دفتر روزنامه صندوق الحاق شد.");
+    toast.success("سند حسابداری با موفقیت به دفتر روزنامه صندوق الحاق شد.");
   };
 
   const handleGenerateInvoicePreview = () => {
     const activePatient = patients.find(p => p.id === invoicePatientId) || patients[0];
     if (!activePatient) {
-      alert("بیماری یافت نشد.");
+      toast.error("بیماری یافت نشد.");
       return;
     }
     const subtotal = invoiceItems.reduce((sum, item) => sum + (item.qty * item.unitPrice), 0);
@@ -117,7 +118,7 @@ export default function BillingTab({
 
   const sendInvoiceEmail = async () => {
     if (!invoiceCreated || !invoiceCreated.patient.email) {
-      alert("ایمیل بیمار ثبت نشده است.");
+      toast.warning("ایمیل بیمار ثبت نشده است.");
       return;
     }
     setIsEmailing(true);
@@ -174,12 +175,12 @@ export default function BillingTab({
 
       const data = await res.json();
       if (res.ok && data.success) {
-        alert("فاکتور با موفقیت به ایمیل بیمار ارسال شد.");
+        toast.success("فاکتور با موفقیت به ایمیل بیمار ارسال شد.");
       } else {
-        alert(data.error || "خطا در ارسال ایمیل.");
+        toast.error(data.error || "خطا در ارسال ایمیل.");
       }
     } catch (err) {
-      alert("خطا در برقراری ارتباط با سرور.");
+      toast.error("خطا در برقراری ارتباط با سرور.");
     } finally {
       setIsEmailing(false);
     }
@@ -635,7 +636,7 @@ export default function BillingTab({
                       setTransactions([finalTx, ...transactions]);
                       setIsViewingInvoicePreview(false);
                       setInvoiceCreated(null);
-                      alert("فاکتور تایید نهایی شد و تراز کل گراند توتال به عنوان دریافت درآمد وارد صندوق دفتری کلینیک شد.");
+                      toast.success("فاکتور تایید نهایی شد و تراز کل گراند توتال به عنوان دریافت درآمد وارد صندوق دفتری کلینیک شد.");
                     }}
                     className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl cursor-pointer border-none flex items-center gap-1.5 shadow-md shadow-emerald-600/10"
                   >

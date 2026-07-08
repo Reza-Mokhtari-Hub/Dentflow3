@@ -1,4 +1,5 @@
 import React from "react";
+import { toast } from "../lib/toast";
 import { Sparkles, Save } from "lucide-react";
 
 interface AiTabProps {
@@ -84,7 +85,7 @@ export default function AiTab({
 ۱. پاسخ به مراجعین درباره خدمات ایمپلنت، لمینت، ارتودنسی، عصب‌کشی، دندانپزشکی کودکان.
 ۲. جراح زیبایی کلینیک "دکتر مختاری" است. شماره تماس: ۰۲۱-۲۲۰۰۰۰۰۰ است.
 ۳. پرداخت اقساطی: ۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره.`);
-              alert("تنظیمات ریست شد. برای ذخیره نهایی، دکمه ذخیره سمت چپ را بزنید.");
+              toast.info("تنظیمات ریست شد. برای ذخیره نهایی، دکمه ذخیره سمت چپ را بزنید.");
             }}
             className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-extrabold text-xs transition-colors cursor-pointer"
           >
@@ -96,7 +97,7 @@ export default function AiTab({
               localStorage.setItem("df_ai_name", aiName);
               localStorage.setItem("df_ai_greeting", aiGreeting);
               localStorage.setItem("df_ai_prompt", aiPrompt);
-              alert("پیکربندی هوش مصنوعی با موفقیت بروزرسانی شد. ربات از این لحظه با پرومپت جدید بیمارها را راهنمایی خواهد کرد.");
+              toast.success("پیکربندی هوش مصنوعی با موفقیت بروزرسانی شد. ربات از این لحظه با پرومپت جدید بیمارها را راهنمایی خواهد کرد.");
             }}
             className="px-8 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-teal-600/15 cursor-pointer border-none"
           >

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "../lib/toast";
 import { Smile, Star, ArrowRight, ArrowLeft, ShieldCheck, ChevronDown, Info, Plus, MessageSquare, X, Check } from "lucide-react";
 import { faqData } from "../data";
 import { AnimatePresence, motion } from "motion/react";
@@ -65,7 +66,7 @@ export default function TestimonialsFaqSection({ testimonials, setTestimonials }
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !comment.trim() || !treatment.trim()) {
-      alert("لطفاً تمامی فیلدها را پر کنید.");
+      toast.warning("لطفاً تمامی فیلدها را پر کنید.");
       return;
     }
 
@@ -102,7 +103,7 @@ export default function TestimonialsFaqSection({ testimonials, setTestimonials }
       }, 3000);
     } catch (error) {
       console.error(error);
-      alert("متأسفانه خطایی در ثبت دیدگاه رخ داد. لطفاً مجدداً تلاش کنید.");
+      toast.error("متأسفانه خطایی در ثبت دیدگاه رخ داد. لطفاً مجدداً تلاش کنید.");
     }
   };
 

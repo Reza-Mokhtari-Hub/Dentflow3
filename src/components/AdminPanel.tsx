@@ -55,6 +55,7 @@ interface AdminPanelProps {
   setMessages: React.Dispatch<React.SetStateAction<any[]>>;
   fetchMessages: () => Promise<void>;
   fetchAdminBookings: () => Promise<void>;
+  refreshClinicState: () => Promise<void>;
   updateBookingStatus: (id: string, status: string) => Promise<void>;
   updateBookingDetails: (id: string, updates: any) => Promise<void>;
   deleteBooking: (id: string) => Promise<void>;
@@ -102,6 +103,7 @@ export default function AdminPanel({
   setMessages,
   fetchMessages,
   fetchAdminBookings,
+  refreshClinicState,
   updateBookingStatus,
   updateBookingDetails,
   deleteBooking,
@@ -124,7 +126,8 @@ export default function AdminPanel({
     age: "",
     gender: "female",
     history: "بدون بیماری زمینه ای",
-    bloodType: "O+"
+    bloodType: "O+",
+    notes: ""
   });
 
   const [activeToothNum, setActiveToothNum] = useState<number | null>(null);
@@ -293,6 +296,7 @@ export default function AdminPanel({
             setPatientsSearch={setPatientsSearch}
             clinicConfig={clinicConfig}
             adminToken={adminToken}
+            refreshPatients={refreshClinicState}
           />
         )}
 
@@ -379,6 +383,7 @@ export default function AdminPanel({
           <ReviewsTab
             testimonials={testimonials}
             setTestimonials={setTestimonials}
+            adminToken={adminToken}
           />
         )}
 

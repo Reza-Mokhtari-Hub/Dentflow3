@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+@import "react-quill-new/dist/quill.snow.css";
 
 @theme {
   --font-sans: "Vazirmatn", "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -17,6 +18,58 @@
   --color-brand-coral-200: #ffd0d0;
   --color-brand-coral-500: #f43f5e;
   --color-brand-coral-600: #e11d48;
+}
+
+/* Quill RTL & Persian styling */
+.ql-editor {
+  direction: rtl;
+  text-align: right;
+  font-family: "Vazirmatn", sans-serif;
+  min-height: 200px;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.ql-toolbar.ql-snow {
+  direction: rtl;
+  text-align: right;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.ql-container.ql-snow {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  border-color: #e2e8f0;
+}
+
+.dark .ql-toolbar.ql-snow {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.dark .ql-container.ql-snow {
+  background: #111827;
+  border-color: #374151;
+  color: #f8fafc;
+}
+
+.dark .ql-editor.ql-blank::before {
+  color: #9ca3af;
+}
+
+.dark .ql-snow .ql-stroke {
+  stroke: #e2e8f0;
+}
+
+.dark .ql-snow .ql-fill {
+  fill: #e2e8f0;
+}
+
+.dark .ql-snow .ql-picker {
+  color: #e2e8f0;
 }
 
 /* Custom scrollbar to match the premium theme */

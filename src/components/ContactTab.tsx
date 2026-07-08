@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { toast } from "../lib/toast";
 import { MapPin, Save, Mail, Trash2, Check, CheckSquare, MessageSquare, AlertCircle, RefreshCw } from "lucide-react";
 
 interface ClinicConfig {
@@ -65,9 +66,10 @@ export default function ContactTab({
 
       const updated = await response.json();
       setMessages(prev => prev.map(m => m.id === id ? updated : m));
+      toast.success("وضعیت پیام با موفقیت به‌روزرسانی شد.");
     } catch (error) {
       console.error("Error updating message status:", error);
-      alert("خطا در به‌روزرسانی وضعیت پیام.");
+      toast.error("خطا در به‌روزرسانی وضعیت پیام.");
     }
   };
 
@@ -87,9 +89,10 @@ export default function ContactTab({
       }
 
       setMessages(prev => prev.filter(m => m.id !== id));
+      toast.success("پیام دریافتی با موفقیت حذف شد.");
     } catch (error) {
       console.error("Error deleting message:", error);
-      alert("خطا در حذف پیام.");
+      toast.error("خطا در حذف پیام.");
     }
   };
 
@@ -164,7 +167,7 @@ export default function ContactTab({
               <button
                 onClick={async () => {
                   await fetchMessages();
-                  alert("لیست پیام‌ها با موفقیت بروزرسانی شد.");
+                  toast.success("لیست پیام‌ها با موفقیت بروزرسانی شد.");
                 }}
                 className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer self-start font-black"
               >
@@ -429,7 +432,7 @@ export default function ContactTab({
             <button
               onClick={() => {
                 localStorage.setItem("df_clinic_config", JSON.stringify(clinicConfig));
-                alert("اطلاعات عمومی کلینیک و پزشک با موفقیت ذخیره شد و در تمامی بخش‌ها و چت‌بات اعمال گردید.");
+                toast.success("اطلاعات عمومی کلینیک و پزشک با موفقیت ذخیره شد و در تمامی بخش‌ها و چت‌بات اعمال گردید.");
               }}
               className="px-8 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-teal-600/15 cursor-pointer border-none"
             >

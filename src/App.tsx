@@ -51,6 +51,7 @@ import ContactSection from "./components/ContactSection";
 // Admin Panel Component
 import AdminPanel from "./components/AdminPanel";
 import PatientPortal from "./components/PatientPortal";
+import ToastContainer from "./components/ToastContainer";
 
 export default function App() {
   // Navigation states
@@ -426,6 +427,21 @@ export default function App() {
     setAdminBookings(bookingsList);
   };
 
+  const refreshClinicState = async () => {
+    try {
+      const response = await fetch("/api/clinic-state");
+      if (response.ok) {
+        const sharedState = await response.json();
+        if (Array.isArray(sharedState.patients)) setPatients(sharedState.patients);
+        if (Array.isArray(sharedState.testimonials)) setTestimonials(sharedState.testimonials);
+        if (Array.isArray(sharedState.transactions)) setTransactions(sharedState.transactions);
+        if (Array.isArray(sharedState.blogPosts)) setArticles(sharedState.blogPosts);
+      }
+    } catch (err) {
+      console.warn("Refresh state error:", err);
+    }
+  };
+
   const fetchAdminBookings = async () => {
     if (useLocalDb) {
       setAdminBookings(getLocalBookings());
@@ -473,6 +489,17 @@ export default function App() {
       const intervalId = setInterval(() => {
         fetchAdminBookings();
         fetchMessages();
+        
+        // Also fetch latest patients and testimonials to ensure chat and reviews are updated
+        fetch("/api/clinic-state")
+          .then(res => res.json())
+          .then(sharedState => {
+            if (Array.isArray(sharedState.patients)) setPatients(sharedState.patients);
+            if (Array.isArray(sharedState.testimonials)) setTestimonials(sharedState.testimonials);
+            if (Array.isArray(sharedState.transactions)) setTransactions(sharedState.transactions);
+          })
+          .catch(err => console.warn("Polling state error:", err));
+          
       }, 15000);
       return () => clearInterval(intervalId);
     }
@@ -817,6 +844,7 @@ export default function App() {
           setMessages={setMessages}
           fetchMessages={fetchMessages}
           fetchAdminBookings={fetchAdminBookings}
+          refreshClinicState={refreshClinicState}
           updateBookingStatus={updateBookingStatus}
           updateBookingDetails={updateBookingDetails}
           deleteBooking={deleteBooking}
@@ -1104,6 +1132,9 @@ export default function App() {
           {isDarkTheme ? "حالت روشن" : "حالت تاریک"}
         </span>
       </button>
+
+      {/* Modern, elegant, non-blocking notification alerts */}
+      <ToastContainer />
 
     </div>
   );

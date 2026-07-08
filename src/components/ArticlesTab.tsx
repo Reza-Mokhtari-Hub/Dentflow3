@@ -1,5 +1,7 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import DOMPurify from "dompurify";
+import { RichTextEditor } from "./RichTextEditor";
 import { 
   BookOpen, 
   Plus, 
@@ -84,17 +86,31 @@ const unsplashStockPhotos = [
   }
 ];
 
-// Reusable Markdown rendering function styled in elegant clinical theme
+// Reusable Content rendering function supporting both Markdown and HTML
 export function renderMarkdown(contentStr: string) {
   if (!contentStr) {
     return (
       <div className="text-center py-8 text-slate-400 text-xs font-bold space-y-1">
         <FileText className="w-8 h-8 mx-auto opacity-30 text-slate-500" />
-        <p>محتوای مقاله خالی است. نوشتن متن را آغاز کنید یا از قالب‌های پیش‌فرض استفاده کنید.</p>
+        <p>محتوای مقاله خالی است. نوشتن متن را آغاز کنید.</p>
       </div>
     );
   }
 
+  // Detect if content is HTML (likely from RichTextEditor) or Markdown
+  const isHtml = contentStr.trim().startsWith("<") || contentStr.includes("</");
+
+  if (isHtml) {
+    return (
+      <div 
+        className="prose prose-slate max-w-none text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base rtl-html-content"
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentStr) }}
+        style={{ direction: "rtl", textAlign: "right" }}
+      />
+    );
+  }
+
+  // Fallback to legacy Markdown renderer for existing posts
   const lines = contentStr.split("\n");
   const elements: React.ReactNode[] = [];
   let currentList: { type: "bullet" | "number"; items: string[] } | null = null;
@@ -452,198 +468,6 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
   const [slashMenuQuery, setSlashMenuQuery] = useState("");
   const [slashMenuIndex, setSlashMenuIndex] = useState(0);
 
-  const triggerInlineImageUpload = () => {
-    setShowSlashMenu(false);
-    const input = document.getElementById("editor-inline-image-input");
-    if (input) {
-      input.click();
-    }
-  };
-
-  const insertSlashMarkdown = (prefix: string, suffix: string = "") => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const cursor = textarea.selectionStart;
-    const val = textarea.value;
-
-    const textBeforeCursor = val.substring(0, cursor);
-    const slashIndex = textBeforeCursor.lastIndexOf("/");
-
-    if (slashIndex !== -1) {
-      const replacement = prefix + suffix;
-      const newContent = val.substring(0, slashIndex) + replacement + val.substring(cursor);
-      setFormContent(newContent);
-      setShowSlashMenu(false);
-
-      setTimeout(() => {
-        textarea.focus();
-        const newCursorPos = slashIndex + prefix.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
-      }, 50);
-    }
-  };
-
-  const handleInlineImageUpload = async (file: File) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showStatus("error", "لطفاً فقط فایل تصویر انتخاب کنید.");
-      return;
-    }
-    
-    setIsUploading(true);
-    
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        try {
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${adminToken || ""}`
-            },
-            body: JSON.stringify({
-              file: base64data,
-              fileName: file.name
-            })
-          });
-          
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error || "خطا در آپلود");
-          }
-          
-          const data = await res.json();
-          if (data.url) {
-            const textarea = textareaRef.current;
-            if (textarea) {
-              const cursor = textarea.selectionStart;
-              const val = textarea.value;
-              
-              const textBeforeCursor = val.substring(0, cursor);
-              const slashIndex = textBeforeCursor.lastIndexOf("/");
-              const targetIndex = slashIndex !== -1 ? slashIndex : cursor;
-              
-              const imageMarkdown = `\n![تصویر](${data.url})\n`;
-              const newContent = val.substring(0, targetIndex) + imageMarkdown + val.substring(cursor);
-              setFormContent(newContent);
-              showStatus("success", "تصویر با موفقیت در موقعیت مکان‌نما درج شد.");
-              
-              setTimeout(() => {
-                textarea.focus();
-                const newPos = targetIndex + imageMarkdown.length;
-                textarea.setSelectionRange(newPos, newPos);
-              }, 50);
-            }
-          }
-        } catch (err: any) {
-          console.error("Inline upload failed:", err);
-          showStatus("error", `خطا در بارگذاری تصویر متن: ${err.message}`);
-        } finally {
-          setIsUploading(false);
-        }
-      };
-    } catch (err) {
-      console.error(err);
-      setIsUploading(false);
-    }
-  };
-
-  const slashCommands = [
-    {
-      id: "image",
-      title: "آپلود و درج تصویر در متن",
-      description: "بارگذاری عکس جدید و درج مستقیم آن",
-      icon: ImageIcon,
-      action: () => triggerInlineImageUpload()
-    },
-    {
-      id: "h1",
-      title: "تیتر بزرگ (Heading 1)",
-      description: "ایجاد یک سربرگ سطح اول",
-      icon: BookOpen,
-      action: () => insertSlashMarkdown("\n# ", "\n")
-    },
-    {
-      id: "h2",
-      title: "تیتر متوسط (Heading 2)",
-      description: "ایجاد یک سربرگ سطح دوم",
-      icon: BookOpen,
-      action: () => insertSlashMarkdown("\n## ", "\n")
-    },
-    {
-      id: "h3",
-      title: "تیتر کوچک (Heading 3)",
-      description: "ایجاد یک سربرگ سطح سوم",
-      icon: BookOpen,
-      action: () => insertSlashMarkdown("\n### ", "\n")
-    },
-    {
-      id: "bold",
-      title: "متن برجسته (Bold)",
-      description: "برجسته کردن نوشته",
-      icon: Bold,
-      action: () => insertSlashMarkdown("**", "**")
-    },
-    {
-      id: "bullet",
-      title: "لیست نشانه‌دار (Bullet)",
-      description: "ایجاد آیتم لیست بدون شماره",
-      icon: List,
-      action: () => insertSlashMarkdown("\n* ", "")
-    },
-    {
-      id: "info",
-      title: "باکس اطلاعات (Info Box)",
-      description: "باکس فیروزه‌ای راهنما",
-      icon: Info,
-      action: () => insertSlashMarkdown("\n> [!INFO] ", "")
-    }
-  ];
-
-  const filteredCommands = slashCommands.filter(cmd => 
-    cmd.title.toLowerCase().includes(slashMenuQuery.toLowerCase()) || 
-    cmd.id.toLowerCase().includes(slashMenuQuery.toLowerCase())
-  );
-
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setFormContent(val);
-    
-    const cursor = e.target.selectionStart;
-    const textBeforeCursor = val.substring(0, cursor);
-    const match = textBeforeCursor.match(/\/(\w*)$/);
-    
-    if (match) {
-      setSlashMenuQuery(match[1]);
-      setSlashMenuIndex(0);
-      setShowSlashMenu(true);
-    } else {
-      setShowSlashMenu(false);
-    }
-  };
-
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showSlashMenu && filteredCommands.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSlashMenuIndex((prev) => (prev + 1) % filteredCommands.length);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSlashMenuIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length);
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        filteredCommands[slashMenuIndex].action();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        setShowSlashMenu(false);
-      }
-    }
-  };
-  
   // Rich Editor Tab Selection
   const [formActiveTab, setFormActiveTab] = useState<"general" | "content" | "visuals" | "preview">("general");
 
@@ -656,7 +480,6 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
   const [formDate, setFormDate] = useState("");
   const [formContent, setFormContent] = useState("");
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMessage({ type, text });
@@ -693,28 +516,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     document.getElementById("articles-editor-container")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Helper to insert markdown tags at cursor position
-  const insertMarkdown = (prefix: string, suffix: string = "") => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end);
-
-    const replacement = prefix + selected + suffix;
-    const newContent = text.substring(0, start) + replacement + text.substring(end);
-    
-    setFormContent(newContent);
-
-    // Reset cursor position
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
-    }, 50);
-  };
-
+  // Helper to load preset templates
   const loadPresetTemplate = (contentTemplate: string) => {
     if (formContent.trim() && !confirm("آیا از بازنویسی متن فعلی مقاله با قالب پیش‌فرض اطمینان دارید؟")) {
       return;
@@ -1290,202 +1092,35 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                           ))}
                         </div>
                       </div>
-
-                      {/* Formatting Helper Buttons */}
-                      <div className="flex flex-wrap items-center gap-1" id="editor-formatting-toolbar">
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("# ")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all font-black text-xs cursor-pointer"
-                          title="تیتر اصلی (H1)"
-                        >
-                          H1
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("## ")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all font-black text-xs cursor-pointer"
-                          title="تیتر فرعی (H2)"
-                        >
-                          H2
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("### ")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all font-black text-xs cursor-pointer"
-                          title="زیر تیتر (H3)"
-                        >
-                          H3
-                        </button>
-                        <div className="w-px h-5 bg-slate-200 mx-1" />
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("**", "**")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer"
-                          title="برجسته کردن متن (Bold)"
-                        >
-                          <Bold className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("*", "*")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer"
-                          title="مورب کردن متن (Italic)"
-                        >
-                          <Italic className="w-3.5 h-3.5" />
-                        </button>
-                        <div className="w-px h-5 bg-slate-200 mx-1" />
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("* ")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer"
-                          title="لیست نشانه‌دار (Bullets)"
-                        >
-                          <List className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("1. ")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer"
-                          title="لیست شماره‌دار"
-                        >
-                          <ListOrdered className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("> ")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer"
-                          title="نقل قول / توصیه"
-                        >
-                          <Quote className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("\n---\n")}
-                          className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all cursor-pointer"
-                          title="خط جداکننده"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        
-                        <div className="w-px h-5 bg-slate-200 mx-1" />
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const input = document.getElementById("editor-inline-image-input");
-                            if (input) input.click();
-                          }}
-                          className="px-2 py-1 bg-teal-50 border border-teal-100 text-teal-700 hover:bg-teal-100 rounded-lg text-[9px] font-black transition-all cursor-pointer flex items-center gap-1"
-                          title="درج تصویر در موقعیت مکان‌نما"
-                        >
-                          <ImageIcon className="w-3 h-3 text-teal-600" />
-                          <span>درج تصویر</span>
-                        </button>
-                        
-                        <div className="w-px h-5 bg-slate-200 mx-1" />
-                        
-                        {/* Custom callout block inserts */}
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("> [!INFO] ")}
-                          className="px-2 py-1 bg-teal-50 border border-teal-100 text-teal-700 hover:bg-teal-100 rounded-lg text-[9px] font-black transition-all cursor-pointer"
-                          title="باکس اطلاعات پزشک"
-                        >
-                          باکس نکته
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("> [!SUCCESS] ")}
-                          className="px-2 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-lg text-[9px] font-black transition-all cursor-pointer"
-                          title="باکس تایید علمی"
-                        >
-                          باکس تایید
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertMarkdown("> [!WARNING] ")}
-                          className="px-2 py-1 bg-rose-50 border border-rose-100 text-rose-700 hover:bg-rose-100 rounded-lg text-[9px] font-black transition-all cursor-pointer"
-                          title="باکس هشدار درمانی"
-                        >
-                          باکس هشدار
-                        </button>
-                      </div>
                     </div>
 
-                    {/* Hidden input for inline image upload */}
-                    <input
-                      type="file"
-                      id="editor-inline-image-input"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleInlineImageUpload(e.target.files[0]);
-                        }
-                      }}
-                    />
-
-                    {/* Split Screen Editor + Preview */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[450px]">
-                      {/* Editor side */}
-                      <div className="flex flex-col h-full space-y-1 relative">
-                        <div className="flex justify-between items-center px-1">
-                          <span className="text-[10px] text-slate-400 font-bold">تایپ کنید <span className="text-teal-600 font-extrabold">/</span> برای منوی میانبرها و آپلود عکس</span>
-                          <span className="text-[10px] font-black text-teal-600">پنل تایپ محتوا</span>
-                        </div>
-                        <textarea
-                          ref={textareaRef}
-                          value={formContent}
-                          onChange={handleTextareaChange}
-                          onKeyDown={handleTextareaKeyDown}
-                          placeholder="نوشتن مقاله را در اینجا آغاز کنید. تایپ کنید / برای آپلود عکس یا میانبرها..."
-                          className="w-full flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none text-right resize-none font-mono focus:border-teal-500 focus:bg-white transition-all overflow-y-auto leading-relaxed"
-                          style={{ direction: "rtl" }}
-                        />
-
-                        {/* Slash command floating menu */}
-                        {showSlashMenu && filteredCommands.length > 0 && (
-                          <div className="absolute bottom-12 right-4 left-4 z-50 max-h-52 overflow-y-auto bg-white border border-slate-200/80 shadow-2xl rounded-xl p-1 flex flex-col gap-0.5 divide-y divide-slate-100 text-right select-none animate-in fade-in slide-in-from-bottom-2 duration-150">
-                            <div className="px-3 py-1.5 text-[9px] text-slate-400 font-bold bg-slate-50 rounded-t-lg sticky top-0 flex justify-between items-center">
-                              <span>انتخاب با جهت‌نما + Enter</span>
-                              <span>منوی میانبر ممیز (/)</span>
-                            </div>
-                            {filteredCommands.map((cmd, idx) => {
-                              const CmdIcon = cmd.icon;
-                              return (
-                                <button
-                                  key={cmd.id}
-                                  type="button"
-                                  onClick={() => cmd.action()}
-                                  className={`w-full flex items-center justify-between px-3 py-2 text-right transition-all rounded-lg cursor-pointer ${
-                                    idx === slashMenuIndex
-                                      ? "bg-teal-50 text-teal-800"
-                                      : "hover:bg-slate-50 text-slate-700"
-                                  }`}
-                                >
-                                  <span className="text-[10px] text-slate-400 font-medium">{cmd.description}</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[11px] font-black">{cmd.title}</span>
-                                    <div className={`p-1 rounded-md ${idx === slashMenuIndex ? "bg-teal-100 text-teal-800" : "bg-slate-100 text-slate-500"}`}>
-                                      <CmdIcon className="w-3.5 h-3.5" />
-                                    </div>
-                                  </div>
-                                </button>
-                              );
-                            })}
+                    <div className="flex flex-col space-y-4" id="editor-main-canvas">
+                      {/* Rich Editor + Preview */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[550px]">
+                        {/* Editor side */}
+                        <div className="flex flex-col h-full space-y-1 relative">
+                          <div className="flex justify-between items-center px-1">
+                            <span className="text-[10px] text-slate-400 font-bold">از نوار ابزار بالا برای فرمت‌بندی استفاده کنید. جادوی هوش مصنوعی نیز در دسترس است.</span>
+                            <span className="text-[10px] font-black text-teal-600">پنل ویرایشگر حرفه‌ای</span>
                           </div>
-                        )}
-                      </div>
-
-                      {/* Live Rendered Side */}
-                      <div className="flex flex-col h-full space-y-1">
-                        <div className="flex justify-between items-center px-1">
-                          <span className="text-[10px] font-black text-indigo-600">پیش‌نمایش زنده و رندر شده</span>
-                          <span className="text-[10px] text-slate-400 font-bold">نمایش استایل نهایی مقاله در وب‌سایت</span>
+                          <RichTextEditor 
+                            value={formContent} 
+                            onChange={setFormContent}
+                            topic={formTitle}
+                            category={formCategory}
+                            placeholder="نوشتن مقاله را در اینجا آغاز کنید..."
+                          />
                         </div>
-                        <div className="w-full flex-1 p-5 bg-slate-50/30 border border-slate-100 rounded-2xl overflow-y-auto text-right font-sans select-none prose prose-slate">
-                          {renderMarkdown(formContent)}
+
+                        {/* Live Rendered Side */}
+                        <div className="flex flex-col h-full space-y-1">
+                          <div className="flex justify-between items-center px-1">
+                            <span className="text-[10px] font-black text-indigo-600">پیش‌نمایش زنده و رندر شده</span>
+                            <span className="text-[10px] text-slate-400 font-bold">نمایش استایل نهایی مقاله در وب‌سایت</span>
+                          </div>
+                          <div className="w-full flex-1 p-5 bg-slate-50/30 border border-slate-100 rounded-2xl overflow-y-auto text-right font-sans select-none prose prose-slate">
+                            {renderMarkdown(formContent)}
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { toast } from "../lib/toast";
 import { 
   FolderHeart, 
   Search, 
@@ -14,7 +15,10 @@ import {
   Trash2,
   Image,
   Mail,
-  X
+  X,
+  Send,
+  Sparkles,
+  RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -45,6 +49,7 @@ interface PatientsTabProps {
   setPatientsSearch: (val: string) => void;
   clinicConfig: any;
   adminToken: string | null;
+  refreshPatients?: () => Promise<void>;
 }
 
 export default function PatientsTab({
@@ -74,25 +79,95 @@ export default function PatientsTab({
   setPatientsSearch,
   clinicConfig,
   adminToken,
+  refreshPatients,
 }: PatientsTabProps) {
   const activePatient = patients.find(p => p.id === selectedPatientId) || patients[0];
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handlePhotoUpload = (file: File) => {
+  const handleRefresh = async () => {
+    if (refreshPatients) {
+      setIsRefreshing(true);
+      await refreshPatients();
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
+  useEffect(() => {
+    if (activePatient && activePatient.chat) {
+      const hasUnread = activePatient.chat.some((m: any) => m.sender === "patient" && m.status === "unread");
+      if (hasUnread) {
+        fetch("/api/admin/mark-chat-read", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ patientId: activePatient.id })
+        }).then(res => {
+          if (res.ok) {
+            // Update local state to reflect read status
+            setPatients(prev => prev.map(p => {
+              if (p.id === activePatient.id) {
+                return {
+                  ...p,
+                  chat: p.chat.map((m: any) => ({ ...m, status: "read" }))
+                };
+              }
+              return p;
+            }));
+          }
+        });
+      }
+    }
+  }, [selectedPatientId, activePatient?.chat?.length, adminToken]);
+
+  const handlePhotoUpload = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("لطفاً فقط فایل تصویر انتخاب کنید.");
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const urlInput = document.getElementById("new-photo-url") as HTMLInputElement;
-      if (urlInput && reader.result) {
-        urlInput.value = reader.result as string;
-        
-        // Pre-fill name if empty
-        const titleInput = document.getElementById("new-photo-title") as HTMLInputElement;
-        if (titleInput && !titleInput.value) {
-          titleInput.value = file.name.split(".")[0];
+    reader.readAsDataURL(file);
+    reader.onloadend = async () => {
+      const base64data = reader.result as string;
+      try {
+        toast.info("در حال بارگذاری تصویر پزشکی به سرور کلینیک...", 2000);
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${adminToken || ""}`
+          },
+          body: JSON.stringify({
+            file: base64data,
+            fileName: file.name
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "خطا در آپلود");
         }
-        alert("تصویر با موفقیت خوانده و برای ذخیره آماده شد.");
+
+        const data = await res.json();
+        if (data.url) {
+          const urlInput = document.getElementById("new-photo-url") as HTMLInputElement;
+          if (urlInput) {
+            urlInput.value = data.url;
+          }
+          const titleInput = document.getElementById("new-photo-title") as HTMLInputElement;
+          if (titleInput && !titleInput.value) {
+            titleInput.value = file.name.split(".")[0];
+          }
+          toast.success("تصویر با موفقیت در سرور ذخیره شد.");
+        }
+      } catch (err: any) {
+        console.error("Photo upload failed:", err);
+        toast.error(`خطا در بارگذاری تصویر: ${err.message}`);
       }
     };
-    reader.readAsDataURL(file);
   };
 
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -101,6 +176,7 @@ export default function PatientsTab({
   const [emailSending, setEmailSending] = useState(false);
   const [isEditingPatient, setIsEditingPatient] = useState(false);
   const [editPatientForm, setEditPatientForm] = useState<any>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const emailTemplates = [
     { id: "custom", label: "پیام دلخواه", subject: "", body: "" },
@@ -140,13 +216,13 @@ export default function PatientsTab({
 
   const savePatientEdits = () => {
     if (!editPatientForm.fullName || !editPatientForm.phone) {
-      alert("لطفاً نام بیمار و شماره تلفن را وارد نمایید.");
+      toast.error("لطفاً نام بیمار و شماره تلفن را وارد نمایید.");
       return;
     }
     const updatedList = patients.map(p => p.id === activePatient.id ? { ...editPatientForm } : p);
     setPatients(updatedList);
     setIsEditingPatient(false);
-    alert("اطلاعات پرونده بیمار با موفقیت بروزرسانی شد.");
+    toast.success("اطلاعات پرونده بیمار با موفقیت بروزرسانی شد.");
   };
 
   const sendCustomEmail = async () => {
@@ -172,7 +248,7 @@ export default function PatientsTab({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert("ایمیل با موفقیت ارسال شد.");
+        toast.success("ایمیل با موفقیت ارسال شد.");
         
         // Update local patients list with the new message in chat history
         const newMsg = {
@@ -201,10 +277,10 @@ export default function PatientsTab({
         setEmailSubject("");
         setEmailBody("");
       } else {
-        alert(data.error || "خطا در ارسال ایمیل.");
+        toast.error(data.error || "خطا در ارسال ایمیل.");
       }
     } catch (err) {
-      alert("خطا در برقراری ارتباط با سرور.");
+      toast.error("خطا در برقراری ارتباط با سرور.");
     } finally {
       setEmailSending(false);
     }
@@ -361,7 +437,7 @@ export default function PatientsTab({
               <button
                 onClick={() => {
                   if (!newPatientForm.fullName || !newPatientForm.phone) {
-                    alert("لطفاً نام بیمار و شماره تلفن را وارد نمایید.");
+                    toast.error("لطفاً نام بیمار و شماره تلفن را وارد نمایید.");
                     return;
                   }
                   const pId = `P-${Math.floor(100 + Math.random() * 900)}`;
@@ -395,7 +471,7 @@ export default function PatientsTab({
                     bloodType: "O+"
                   });
                   setIsAddingPatient(false);
-                  alert("پرونده دیجیتال جدید مراجع با موفقیت در سامانه دنت فلو ذخیره شد.");
+                  toast.success("پرونده دیجیتال جدید مراجع با موفقیت در سامانه دنت فلو ذخیره شد.");
                 }}
                 className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl transition-all cursor-pointer border-none"
               >
@@ -500,6 +576,11 @@ export default function PatientsTab({
                   <p className="text-slate-600 font-bold mt-1 leading-relaxed">{activePatient.history}</p>
                 </div>
 
+                <div className="bg-amber-50/30 p-3.5 rounded-xl border border-amber-100/50 text-xs">
+                  <span className="text-amber-700 font-extrabold block">یادداشت‌ها و نظرات پزشک (Private Notes):</span>
+                  <p className="text-slate-600 font-bold mt-1 leading-relaxed">{activePatient.notes || "موردی ثبت نشده است."}</p>
+                </div>
+
                 {/* Unified Chat History Section */}
                 <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
                   <div className="bg-teal-50/50 p-4 border-b border-slate-100 flex items-center justify-between">
@@ -507,6 +588,14 @@ export default function PatientsTab({
                       <Mail className="w-4 h-4 text-teal-600" />
                       <span>تاریخچه گفتگو با بیمار (چت و ایمیل)</span>
                     </h3>
+                    <button 
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      className="p-1.5 hover:bg-teal-100 text-teal-600 rounded-lg transition-all"
+                      title="بروزرسانی پیام‌ها"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                    </button>
                   </div>
                   <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar flex flex-col">
                     {activePatient.chat && activePatient.chat.length > 0 ? (
@@ -535,6 +624,56 @@ export default function PatientsTab({
                     ) : (
                       <div className="text-center py-8 text-slate-400 font-bold text-xs italic">هنوز گفتگویی ثبت نشده است.</div>
                     )}
+                  </div>
+                  
+                  {/* Doctor Quick Reply */}
+                  <div className="p-3 border-t border-slate-100 bg-slate-50/30">
+                    <form 
+                      className="flex gap-2"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const input = e.currentTarget.elements.namedItem("replyInput") as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (!val) return;
+                        input.value = "";
+                        try {
+                          const res = await fetch("/api/admin/send-chat", {
+                            method: "POST",
+                            headers: { 
+                              "Content-Type": "application/json",
+                              "Authorization": `Bearer ${adminToken}`
+                            },
+                            body: JSON.stringify({ patientId: activePatient.id, message: val })
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.newMessage) {
+                            // Update local state
+                            setPatients(prev => prev.map(p => {
+                              if (p.id === activePatient.id) {
+                                return { ...p, chat: [data.newMessage, ...(p.chat || [])] };
+                              }
+                              return p;
+                            }));
+                          }
+                        } catch (err) {
+                          toast.error("خطا در ارسال پیام.");
+                        }
+                      }}
+                    >
+                      <input 
+                        name="replyInput"
+                        type="text"
+                        placeholder="پاسخ به بیمار..."
+                        className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-teal-500"
+                      />
+                      <button 
+                        type="submit"
+                        className="bg-teal-600 text-white p-2 rounded-xl hover:bg-teal-700 transition-colors cursor-pointer border-none shadow-sm flex items-center justify-center"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </form>
+                    <p className="text-[9px] text-slate-400 font-bold mt-1.5 mr-1">این پیام مستقیماً در پورتال بیمار نمایش داده می‌شود.</p>
                   </div>
                 </div>
 
@@ -653,25 +792,65 @@ export default function PatientsTab({
                             <textarea
                               value={editPatientForm.history}
                               onChange={(e) => setEditPatientForm({ ...editPatientForm, history: e.target.value })}
-                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold resize-none"
-                              rows={3}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold resize-none text-xs"
+                              rows={2}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-bold block text-xs">یادداشت‌های اختصاصی پزشک:</label>
+                            <textarea
+                              value={editPatientForm.notes}
+                              onChange={(e) => setEditPatientForm({ ...editPatientForm, notes: e.target.value })}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold resize-none text-xs"
+                              rows={2}
                             />
                           </div>
                         </div>
-                        <div className="p-5 bg-slate-50 flex items-center justify-end gap-3">
-                          <button
-                            onClick={() => setIsEditingPatient(false)}
-                            className="px-6 py-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black text-sm hover:bg-slate-100 transition-all cursor-pointer"
-                          >
-                            انصراف
-                          </button>
-                          <button
-                            onClick={savePatientEdits}
-                            className="px-8 py-2.5 rounded-2xl bg-teal-600 text-white font-black text-sm hover:bg-teal-700 transition-all flex items-center gap-2 shadow-lg shadow-teal-600/20 border-none cursor-pointer"
-                          >
-                            <Save className="w-4 h-4" />
-                            <span>ذخیره تغییرات پرونده</span>
-                          </button>
+                        <div className="p-5 bg-slate-50 flex items-center justify-between border-t border-slate-100">
+                          <div>
+                            {confirmDeleteId === activePatient.id ? (
+                              <button
+                                onClick={() => {
+                                  const updatedList = patients.filter(p => p.id !== activePatient.id);
+                                  setPatients(updatedList);
+                                  setIsEditingPatient(false);
+                                  setConfirmDeleteId(null);
+                                  if (updatedList.length > 0) {
+                                    setSelectedPatientId(updatedList[0].id);
+                                  } else {
+                                    setSelectedPatientId("");
+                                  }
+                                  toast.success("پرونده دیجیتال بیمار با موفقیت حذف گردید.");
+                                }}
+                                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition-all border-none cursor-pointer"
+                              >
+                                بله، حذف قطعی شود
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteId(activePatient.id)}
+                                className="px-4 py-2 rounded-xl border border-rose-200 text-rose-600 font-extrabold text-xs hover:bg-rose-50 transition-all bg-white cursor-pointer"
+                              >
+                                حذف پرونده بیمار
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => setIsEditingPatient(false)}
+                              className="px-6 py-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black text-sm hover:bg-slate-100 transition-all cursor-pointer"
+                            >
+                              انصراف
+                            </button>
+                            <button
+                              onClick={savePatientEdits}
+                              className="px-8 py-2.5 rounded-2xl bg-teal-600 text-white font-black text-sm hover:bg-teal-700 transition-all flex items-center gap-2 shadow-lg shadow-teal-600/20 border-none cursor-pointer"
+                            >
+                              <Save className="w-4 h-4" />
+                              <span>ذخیره تغییرات پرونده</span>
+                            </button>
+                          </div>
                         </div>
                       </motion.div>
                     </motion.div>
@@ -682,7 +861,7 @@ export default function PatientsTab({
                   <button
                     onClick={() => {
                       if (!activePatient.email) {
-                        alert("ایمیلی برای این بیمار ثبت نشده است. لطفاً ابتدا در قسمت اطلاعات بیمار، ایمیل را وارد کنید.");
+                        toast.warning("ایمیلی برای این بیمار ثبت نشده است. لطفاً ابتدا در قسمت اطلاعات بیمار، ایمیل را وارد کنید.");
                         return;
                       }
                       setIsEmailModalOpen(!isEmailModalOpen);
@@ -867,7 +1046,7 @@ export default function PatientsTab({
                             const updatedChart = { ...activePatient.dentalChart, [activeToothNum]: st.id };
                             const updatedList = patients.map(p => p.id === activePatient.id ? { ...p, dentalChart: updatedChart } : p);
                             setPatients(updatedList);
-                            alert(`وضعیت دندان شماره ${activeToothNum} به «${st.label.split(" ")[0]}» بروزرسانی شد.`);
+                            toast.success(`وضعیت دندان شماره ${activeToothNum} به «${st.label.split(" ")[0]}» بروزرسانی شد.`);
                           }}
                           className={`py-2 rounded-lg font-bold transition-all text-[11px] cursor-pointer border-none ${st.color} hover:opacity-90`}
                         >
@@ -963,7 +1142,7 @@ export default function PatientsTab({
                     <button
                       onClick={() => {
                         if (!newPlanTitle || !newPlanCost) {
-                          alert("لطفاً عنوان درمان و هزینه را مشخص کنید.");
+                          toast.error("لطفاً عنوان درمان و هزینه را مشخص کنید.");
                           return;
                         }
                         const updatedPlan = [
@@ -973,7 +1152,7 @@ export default function PatientsTab({
                         setPatients(patients.map(p => p.id === activePatient.id ? { ...p, treatmentPlan: updatedPlan } : p));
                         setNewPlanTitle("");
                         setNewPlanCost("");
-                        alert("آیتم طرح درمان جدید به پرونده بیمار پیوست شد.");
+                        toast.success("آیتم طرح درمان جدید به پرونده بیمار پیوست شد.");
                       }}
                       className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition-all cursor-pointer border-none"
                     >
@@ -1059,7 +1238,7 @@ export default function PatientsTab({
                           onClick={(e) => {
                             e.preventDefault();
                             if (!newDrug.name) {
-                              alert("لطفاً نام دارو را وارد کنید.");
+                              toast.error("لطفاً نام دارو را وارد کنید.");
                               return;
                             }
                             setRxDrugs([...rxDrugs, newDrug]);
@@ -1081,7 +1260,7 @@ export default function PatientsTab({
                             finalDrugs.push(newDrug);
                           }
                           if (finalDrugs.length === 0) {
-                            alert("لطفاً حداقل یک قلم دارو با مشخصات کامل اضافه کنید.");
+                            toast.error("لطفاً حداقل یک قلم دارو با مشخصات کامل اضافه کنید.");
                             return;
                           }
                           const newRx = {
@@ -1096,7 +1275,7 @@ export default function PatientsTab({
                           setRxDrugs([]);
                           setNewDrug({ name: "", dose: "هر ۸ ساعت یک عدد", duration: "۵ روز" });
                           setIsAddingPrescription(false);
-                          alert("نسخه الکترونیکی با موفقیت صادر و در پرونده بیمار ذخیره شد.");
+                          toast.success("نسخه الکترونیکی با موفقیت صادر و در پرونده بیمار ذخیره شد.");
                         }}
                         className="w-full py-2 bg-slate-950 hover:bg-slate-900 text-white font-black rounded-xl transition-all border-none cursor-pointer"
                       >
@@ -1284,7 +1463,7 @@ export default function PatientsTab({
                         const notesInput = document.getElementById("new-photo-notes") as HTMLInputElement;
                         
                         if (!titleInput?.value || !urlInput?.value) {
-                          alert("لطفاً عنوان تصویر و آدرس تصویر (یا تصویر آپلود شده) را مشخص کنید.");
+                          toast.error("لطفاً عنوان تصویر و آدرس تصویر (یا تصویر آپلود شده) را مشخص کنید.");
                           return;
                         }
 
@@ -1302,7 +1481,7 @@ export default function PatientsTab({
                         titleInput.value = "";
                         urlInput.value = "";
                         if (notesInput) notesInput.value = "";
-                        alert("تصویر پزشکی با موفقیت به پرونده بیمار ضمیمه شد.");
+                        toast.success("تصویر پزشکی با موفقیت به پرونده بیمار ضمیمه شد.");
                       }}
                       className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-xl transition-all cursor-pointer border border-none"
                     >
