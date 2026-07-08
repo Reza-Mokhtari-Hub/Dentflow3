@@ -174,6 +174,9 @@ const defaultPatients = [
         ],
         diagnosis: "عفونت لثه اطراف دندان ۱۳"
       }
+    ],
+    messageHistory: [
+      { id: 1, date: "1405/04/10", subject: "نوبت فردا", body: "یادآوری نوبت معاینه فردا ساعت ۱۰ صبح" }
     ]
   },
   {
@@ -580,6 +583,10 @@ let services: any[] = [];
 let aiConfig = { ...defaultClinicState.aiConfig };
 let messages: any[] = [];
 let testimonials: any[] = [];
+
+// Temporary in-memory storage for patient OTPs
+// In production, use a database with TTL or Redis
+const patientOtps = new Map<string, { code: string; expires: number }>();
 
 let mongoClient: MongoClient | null = null;
 
@@ -1289,6 +1296,21 @@ export async function createExpressApp() {
       }
       const success = await sendEmail(to, subject, body);
       if (success) {
+        // Save to patient chat history
+        const patient = patients.find(p => p.email && p.email.toLowerCase() === to.toLowerCase());
+        if (patient) {
+          if (!patient.chat) patient.chat = [];
+          patient.chat.unshift({
+            id: Date.now(),
+            date: new Date().toLocaleDateString("fa-IR"),
+            time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
+            sender: "clinic",
+            subject,
+            text: body.replace(/<[^>]*>/g, ""),
+            status: "read"
+          });
+          await persistState();
+        }
         res.json({ success: true });
       } else {
         res.status(500).json({ error: "خطا در ارسال ایمیل. مطمئن شوید که اکانت جیمیل به درستی متصل شده است." });
@@ -1544,6 +1566,122 @@ export async function createExpressApp() {
     } catch (error: any) {
       console.error("Gemini Generate Article Error:", error);
       return res.status(500).json({ error: error.message || "خطا در تولید محتوای مقاله با هوش مصنوعی." });
+    }
+  });
+
+  // --- PATIENT PORTAL API ---
+
+  // 1. Request Login Code
+  app.post("/api/patient/request-otp", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "ایمیل الزامی است." });
+
+      // Find patient by email
+      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+      if (!patient) {
+        return res.status(404).json({ error: "بیماری با این مشخصات یافت نشد. لطفا با کلینیک تماس بگیرید." });
+      }
+
+      // Generate 6-digit code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+      patientOtps.set(email.toLowerCase(), { code, expires });
+
+      // Send Email using the helper function
+      const bodyHtml = `
+        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px; border: 1px solid #eee; border-radius: 15px;">
+          <h2 style="color: #0d9488;">خوش آمدید به پورتال بیماران دنت فلو</h2>
+          <p>سلام ${patient.fullName} عزیز،</p>
+          <p>کد تایید شما جهت ورود به سامانه:</p>
+          <div style="background: #f1f5f9; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #0f172a; border-radius: 10px; margin: 20px 0;">
+            ${code}
+          </div>
+          <p style="font-size: 12px; color: #666;">این کد تا ۱۰ دقیقه دیگر اعتبار دارد.</p>
+          <hr style="border: 1px solid #eee; margin: 20px 0;"/>
+          <p style="font-size: 11px; color: #999;">اگر شما درخواستی برای ورود نداده‌اید، لطفا این پیام را نادیده بگیرید.</p>
+        </div>
+      `;
+
+      const emailSent = await sendEmail(email, "کد تایید ورود به داشبورد بیمار - دنت فلو", bodyHtml);
+      
+      if (!emailSent) {
+        return res.status(500).json({ 
+          error: "خطا در ارسال ایمیل تایید. لطفا از ادمین کلینیک بخواهید تنظیمات ایمیل (GMAIL_USER و GMAIL_PASS) را در تنظیمات پنل AI Studio وارد کند." 
+        });
+      }
+
+      res.json({ success: true, message: "کد تایید به ایمیل شما ارسال شد." });
+    } catch (err: any) {
+      console.error("Patient OTP request error:", err);
+      res.status(500).json({ error: "خطا در پردازش درخواست ورود." });
+    }
+  });
+
+  // 2. Verify Login Code and Fetch Dashboard Data
+  app.post("/api/patient/verify-otp", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code) return res.status(400).json({ error: "ایمیل و کد تایید الزامی هستند." });
+
+      const stored = patientOtps.get(email.toLowerCase());
+      if (!stored || stored.code !== code || stored.expires < Date.now()) {
+        return res.status(401).json({ error: "کد تایید اشتباه است یا منقضی شده است." });
+      }
+
+      // OTP verified - Find patient and gather all data
+      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
+
+      // Gather related data
+      const patientBookings = bookings.filter(b => b.email && b.email.toLowerCase() === email.toLowerCase());
+      const patientTransactions = transactions.filter(t => t.patientId === patient.id);
+      
+      // Clear OTP
+      patientOtps.delete(email.toLowerCase());
+
+      res.json({
+        success: true,
+        patient: {
+          ...patient,
+          bookings: patientBookings,
+          transactions: patientTransactions
+        }
+      });
+    } catch (error: any) {
+      console.error("Patient verify error:", error);
+      res.status(500).json({ error: "خطا در تایید کد ورود." });
+    }
+  });
+
+  // 3. Patient sends message to clinic
+  app.post("/api/patient/send-message", async (req, res) => {
+    try {
+      const { email, message } = req.body;
+      if (!email || !message) return res.status(400).json({ error: "ایمیل و متن پیام الزامی است." });
+
+      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
+
+      if (!patient.chat) patient.chat = [];
+      
+      const newMsg = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString("fa-IR"),
+        time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
+        sender: "patient",
+        text: message,
+        status: "unread"
+      };
+
+      patient.chat.unshift(newMsg);
+
+      await persistState();
+      res.json({ success: true, message: "پیام شما با موفقیت ارسال شد.", newMessage: newMsg });
+    } catch (error: any) {
+      console.error("Send message error:", error);
+      res.status(500).json({ error: "خطا در ارسال پیام." });
     }
   });
 

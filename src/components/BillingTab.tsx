@@ -6,7 +6,8 @@ import {
   CreditCard, 
   FileText, 
   CheckCircle, 
-  Printer 
+  Printer,
+  Mail 
 } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -31,6 +32,7 @@ interface BillingTabProps {
   billingTypeFilter: string;
   setBillingTypeFilter: (val: string) => void;
   clinicConfig: any;
+  adminToken: string | null;
 }
 
 export default function BillingTab({
@@ -54,6 +56,7 @@ export default function BillingTab({
   billingTypeFilter,
   setBillingTypeFilter,
   clinicConfig,
+  adminToken,
 }: BillingTabProps) {
   const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
@@ -108,6 +111,78 @@ export default function BillingTab({
       date: new Date().toLocaleDateString("fa-IR")
     });
     setIsViewingInvoicePreview(true);
+  };
+
+  const [isEmailing, setIsEmailing] = React.useState(false);
+
+  const sendInvoiceEmail = async () => {
+    if (!invoiceCreated || !invoiceCreated.patient.email) {
+      alert("ایمیل بیمار ثبت نشده است.");
+      return;
+    }
+    setIsEmailing(true);
+    try {
+      const itemsHtml = invoiceCreated.items.map((it: any) => `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #eee;">${it.title}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${it.qty}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: left;">${it.unitPrice.toLocaleString("fa-IR")} تومان</td>
+        </tr>
+      `).join("");
+
+      const bodyHtml = `
+        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px; color: #333;">
+          <h2 style="color: #0d9488;">صورتحساب رسمی کلینیک دنت فلو</h2>
+          <p>سلام ${invoiceCreated.patient.fullName} عزیز،</p>
+          <p>صورتحساب شماره <b>${invoiceCreated.serialNo}</b> مورخ <b>${invoiceCreated.date}</b> جهت اطلاع و تسویه برای شما ارسال می‌گردد.</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;">
+            <thead>
+              <tr style="background: #f8fafc;">
+                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #0d9488;">خدمت</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 2px solid #0d9488;">تعداد</th>
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #0d9488;">مبلغ واحد</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div style="background: #f1f5f9; padding: 15px; border-radius: 10px; margin-top: 10px;">
+            <p style="margin: 5px 0;">جمع کل: ${invoiceCreated.subtotal.toLocaleString("fa-IR")} تومان</p>
+            <p style="margin: 5px 0; color: #e11d48;">تخفیف: ${invoiceCreated.discountAmt.toLocaleString("fa-IR")} تومان</p>
+            <p style="margin: 5px 0; font-weight: bold; font-size: 16px; color: #0f172a;">مبلغ قابل پرداخت: ${invoiceCreated.grandTotal.toLocaleString("fa-IR")} تومان</p>
+          </div>
+
+          <p style="margin-top: 20px;">با تشکر از اعتماد شما،<br/>تیم مدیریتی کلینیک دنت فلو</p>
+        </div>
+      `;
+
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          to: invoiceCreated.patient.email,
+          subject: `صورتحساب رسمی ${invoiceCreated.patient.fullName} - کلینیک دنت فلو`,
+          body: bodyHtml
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert("فاکتور با موفقیت به ایمیل بیمار ارسال شد.");
+      } else {
+        alert(data.error || "خطا در ارسال ایمیل.");
+      }
+    } catch (err) {
+      alert("خطا در برقراری ارتباط با سرور.");
+    } finally {
+      setIsEmailing(false);
+    }
   };
 
   return (
@@ -566,6 +641,15 @@ export default function BillingTab({
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
                     <span>ثبت و صدور نهایی صورتحساب</span>
+                  </button>
+
+                  <button
+                    onClick={sendInvoiceEmail}
+                    disabled={isEmailing || !invoiceCreated.patient.email}
+                    className="px-3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl cursor-pointer border-none flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>{isEmailing ? "در حال ارسال..." : "ارسال به ایمیل بیمار"}</span>
                   </button>
 
                   <button

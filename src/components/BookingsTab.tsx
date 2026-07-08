@@ -234,6 +234,12 @@ export default function BookingsTab({
                           <span className="text-slate-400 font-bold block text-[11px]">شماره تماس:</span>
                           <a href={`tel:${b.phone}`} className="font-bold text-teal-600 hover:underline block mt-0.5 font-mono text-right" dir="ltr">{b.phone}</a>
                         </div>
+                        {b.email && (
+                          <div className="lg:col-span-1">
+                            <span className="text-slate-400 font-bold block text-[11px]">ایمیل:</span>
+                            <span className="font-bold text-slate-700 block mt-0.5 font-mono text-[11px] truncate" dir="ltr" title={b.email}>{b.email}</span>
+                          </div>
+                        )}
                         <div>
                           <span className="text-slate-400 font-bold block text-[11px]">خدمت مورد نظر:</span>
                           <span className="font-semibold text-slate-700 block mt-0.5">{getServiceTitle(b.serviceId)}</span>
@@ -401,9 +407,9 @@ export default function BookingsTab({
                               updateBookingDetails(b.id, {
                                 date: editDate,
                                 timeSlot: editTimeSlot,
-                                adminComment: editAdminComment,
-                                status: "approved"
+                                adminComment: editAdminComment
                               });
+                              updateBookingStatus(b.id, "approved");
                               setActiveEditingId(null);
                             }}
                             className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold cursor-pointer transition-colors flex items-center gap-1 shadow-md shadow-teal-600/10"

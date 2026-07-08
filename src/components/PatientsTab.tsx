@@ -13,7 +13,8 @@ import {
   UploadCloud,
   Trash2,
   Image,
-  Mail
+  Mail,
+  X
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -72,6 +73,7 @@ export default function PatientsTab({
   patientsSearch,
   setPatientsSearch,
   clinicConfig,
+  adminToken,
 }: PatientsTabProps) {
   const activePatient = patients.find(p => p.id === selectedPatientId) || patients[0];
 
@@ -97,6 +99,55 @@ export default function PatientsTab({
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+  const [isEditingPatient, setIsEditingPatient] = useState(false);
+  const [editPatientForm, setEditPatientForm] = useState<any>(null);
+
+  const emailTemplates = [
+    { id: "custom", label: "پیام دلخواه", subject: "", body: "" },
+    { 
+      id: "reminder", 
+      label: "یادآوری نوبت", 
+      subject: "یادآوری نوبت معاینه - کلینیک دنت فلو", 
+      body: "مراجع گرامی،\nیادآوری می‌شود که نوبت دندانپزشکی شما برای فردا رزرو شده است. لطفاً ۱۰ دقیقه قبل از ساعت مقرر در کلینیک حضور داشته باشید." 
+    },
+    { 
+      id: "prescription", 
+      label: "ارسال نسخه دیجیتال", 
+      subject: "نسخه دیجیتال و دستورات دارویی - دنت فلو", 
+      body: "بیمار گرامی،\nنسخه دارویی شما به پیوست صادر گردید. لطفاً طبق دستورات پزشک مصرف نمایید." 
+    },
+    { 
+      id: "followup", 
+      label: "پیگیری پس از درمان", 
+      subject: "بررسی وضعیت پس از درمان - کلینیک دنت فلو", 
+      body: "سلام، امیدواریم حالتان خوب باشد.\nجهت بررسی وضعیت بهبودی پس از درمان اخیر، این پیام ارسال می‌گردد. در صورت بروز هرگونه درد غیرطبیعی با ما تماس بگیرید." 
+    }
+  ];
+
+  const handleTemplateChange = (templateId: string) => {
+    const template = emailTemplates.find(t => t.id === templateId);
+    if (template) {
+      setEmailSubject(template.subject);
+      setEmailBody(template.body);
+    }
+  };
+
+  const startEditing = () => {
+    if (!activePatient) return;
+    setEditPatientForm({ ...activePatient });
+    setIsEditingPatient(true);
+  };
+
+  const savePatientEdits = () => {
+    if (!editPatientForm.fullName || !editPatientForm.phone) {
+      alert("لطفاً نام بیمار و شماره تلفن را وارد نمایید.");
+      return;
+    }
+    const updatedList = patients.map(p => p.id === activePatient.id ? { ...editPatientForm } : p);
+    setPatients(updatedList);
+    setIsEditingPatient(false);
+    alert("اطلاعات پرونده بیمار با موفقیت بروزرسانی شد.");
+  };
 
   const sendCustomEmail = async () => {
     if (!activePatient || !activePatient.email) return;
@@ -122,6 +173,30 @@ export default function PatientsTab({
       const data = await res.json();
       if (res.ok && data.success) {
         alert("ایمیل با موفقیت ارسال شد.");
+        
+        // Update local patients list with the new message in chat history
+        const newMsg = {
+          id: Date.now(),
+          date: new Date().toLocaleDateString("fa-IR"),
+          time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
+          sender: "clinic",
+          subject: emailSubject,
+          text: emailBody,
+          status: "read"
+        };
+        
+        const updatedPatients = patients.map(p => {
+          if (p.id === activePatient.id) {
+            return {
+              ...p,
+              chat: [newMsg, ...(p.chat || [])]
+            };
+          }
+          return p;
+        });
+        
+        setPatients(updatedPatients);
+        
         setIsEmailModalOpen(false);
         setEmailSubject("");
         setEmailBody("");
@@ -382,6 +457,13 @@ export default function PatientsTab({
                   <div className="flex items-center gap-3">
                     <span className="text-lg font-black text-slate-800">{activePatient.fullName}</span>
                     <span className="text-[10px] font-black px-2.5 py-0.5 bg-teal-50 text-teal-700 border border-teal-100 rounded-full font-mono">{activePatient.id}</span>
+                    <button
+                      onClick={startEditing}
+                      className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 bg-transparent border-none cursor-pointer"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                      <span>ویرایش اطلاعات</span>
+                    </button>
                   </div>
                   <div className="text-xs text-slate-400 font-bold">
                     کد ملی بیمار: <span className="font-mono text-slate-700">{activePatient.nationalId}</span>
@@ -405,12 +487,196 @@ export default function PatientsTab({
                     <span className="text-slate-400 block text-[10px]">شماره همراه:</span>
                     <span className="text-slate-800 text-sm font-mono font-bold mt-1 block" dir="ltr">{activePatient.phone}</span>
                   </div>
+                  {activePatient.email && (
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2 sm:col-span-1">
+                      <span className="text-slate-400 block text-[10px]">ایمیل:</span>
+                      <span className="text-slate-800 text-[11px] font-mono font-bold mt-1 block truncate" dir="ltr" title={activePatient.email}>{activePatient.email}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-rose-50/30 p-3.5 rounded-xl border border-rose-100/50 text-xs">
                   <span className="text-rose-700 font-extrabold block">پیشینه پزشکی و حساسیت‌های دارویی (EHR Sensitivities):</span>
                   <p className="text-slate-600 font-bold mt-1 leading-relaxed">{activePatient.history}</p>
                 </div>
+
+                {/* Unified Chat History Section */}
+                <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+                  <div className="bg-teal-50/50 p-4 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm">
+                      <Mail className="w-4 h-4 text-teal-600" />
+                      <span>تاریخچه گفتگو با بیمار (چت و ایمیل)</span>
+                    </h3>
+                  </div>
+                  <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar flex flex-col">
+                    {activePatient.chat && activePatient.chat.length > 0 ? (
+                      [...activePatient.chat].reverse().map((msg: any) => (
+                        <div 
+                          key={msg.id} 
+                          className={`max-w-[85%] p-3 rounded-2xl text-xs relative group ${
+                            msg.sender === "patient" 
+                              ? "bg-slate-100 text-slate-700 self-start rounded-tr-none" 
+                              : "bg-teal-600 text-white self-end rounded-tl-none shadow-md shadow-teal-600/10"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-4 mb-1 opacity-60 font-black text-[9px]">
+                            <span>{msg.sender === "patient" ? "بیمار" : "کلینیک"}</span>
+                            <span>{msg.date} - {msg.time}</span>
+                          </div>
+                          {msg.subject && (
+                            <div className="font-black mb-1 border-b border-white/20 pb-1">{msg.subject}</div>
+                          )}
+                          <p className="font-bold leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          {msg.sender === "patient" && msg.status === "unread" && (
+                            <span className="absolute -right-1 -top-1 w-2.5 h-2.5 bg-teal-500 rounded-full border-2 border-white"></span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-slate-400 font-bold text-xs italic">هنوز گفتگویی ثبت نشده است.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Edit Patient Modal/Overlay */}
+                <AnimatePresence>
+                  {isEditingPatient && editPatientForm && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+                    >
+                      <motion.div
+                        initial={{ scale: 0.9, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden"
+                      >
+                        <div className="bg-teal-600 p-5 text-white flex items-center justify-between">
+                          <h3 className="text-lg font-black flex items-center gap-2">
+                            <Sliders className="w-5 h-5" />
+                            <span>ویرایش اطلاعات پرونده: {activePatient.fullName}</span>
+                          </h3>
+                          <button onClick={() => setIsEditingPatient(false)} className="bg-white/20 hover:bg-white/30 p-2 rounded-xl transition-colors border-none text-white cursor-pointer">
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-bold block text-xs">نام و نام خانوادگی بیمار:</label>
+                            <input
+                              type="text"
+                              value={editPatientForm.fullName}
+                              onChange={(e) => setEditPatientForm({ ...editPatientForm, fullName: e.target.value })}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-slate-500 font-bold block text-xs">شماره تماس:</label>
+                              <input
+                                type="text"
+                                value={editPatientForm.phone}
+                                onChange={(e) => setEditPatientForm({ ...editPatientForm, phone: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-left"
+                                dir="ltr"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-slate-500 font-bold block text-xs">ایمیل:</label>
+                              <input
+                                type="email"
+                                value={editPatientForm.email || ""}
+                                onChange={(e) => setEditPatientForm({ ...editPatientForm, email: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-left"
+                                dir="ltr"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-slate-500 font-bold block text-xs">کد ملی:</label>
+                              <input
+                                type="text"
+                                value={editPatientForm.nationalId}
+                                onChange={(e) => setEditPatientForm({ ...editPatientForm, nationalId: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-left"
+                                dir="ltr"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-slate-500 font-bold block text-xs">سن:</label>
+                              <input
+                                type="number"
+                                value={editPatientForm.age}
+                                onChange={(e) => setEditPatientForm({ ...editPatientForm, age: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-slate-500 font-bold block text-xs">گروه خونی:</label>
+                              <select
+                                value={editPatientForm.bloodType}
+                                onChange={(e) => setEditPatientForm({ ...editPatientForm, bloodType: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-right"
+                              >
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-slate-500 font-bold block text-xs">جنسیت:</label>
+                              <select
+                                value={editPatientForm.gender}
+                                onChange={(e) => setEditPatientForm({ ...editPatientForm, gender: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-right"
+                              >
+                                <option value="female">زن</option>
+                                <option value="male">مرد</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-bold block text-xs">تاریخچه پزشکی و حساسیت‌ها:</label>
+                            <textarea
+                              value={editPatientForm.history}
+                              onChange={(e) => setEditPatientForm({ ...editPatientForm, history: e.target.value })}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold resize-none"
+                              rows={3}
+                            />
+                          </div>
+                        </div>
+                        <div className="p-5 bg-slate-50 flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => setIsEditingPatient(false)}
+                            className="px-6 py-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 font-black text-sm hover:bg-slate-100 transition-all cursor-pointer"
+                          >
+                            انصراف
+                          </button>
+                          <button
+                            onClick={savePatientEdits}
+                            className="px-8 py-2.5 rounded-2xl bg-teal-600 text-white font-black text-sm hover:bg-teal-700 transition-all flex items-center gap-2 shadow-lg shadow-teal-600/20 border-none cursor-pointer"
+                          >
+                            <Save className="w-4 h-4" />
+                            <span>ذخیره تغییرات پرونده</span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <div className="pt-2">
                   <button
@@ -436,6 +702,21 @@ export default function PatientsTab({
                     exit={{ opacity: 0, height: 0 }}
                     className="border-t border-slate-100 pt-4 mt-2 text-right space-y-4"
                   >
+                    <div className="space-y-1 text-xs">
+                      <label className="text-slate-500 font-bold block">انتخاب قالب آماده:</label>
+                      <div className="flex flex-wrap gap-2">
+                        {emailTemplates.map(t => (
+                          <button
+                            key={t.id}
+                            onClick={() => handleTemplateChange(t.id)}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-bold transition-all text-[10px] cursor-pointer"
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="space-y-1 text-xs">
                       <label className="text-slate-500 font-bold block">موضوع پیام:</label>
                       <input

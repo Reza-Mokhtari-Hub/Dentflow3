@@ -318,6 +318,7 @@ export default function AdminPanel({
             billingTypeFilter={billingTypeFilter}
             setBillingTypeFilter={setBillingTypeFilter}
             clinicConfig={clinicConfig}
+            adminToken={adminToken}
           />
         )}
 

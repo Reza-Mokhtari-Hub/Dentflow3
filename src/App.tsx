@@ -23,7 +23,8 @@ import {
   Info,
   Instagram,
   Send,
-  PhoneCall
+  PhoneCall,
+  User
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -49,10 +50,12 @@ import ContactSection from "./components/ContactSection";
 
 // Admin Panel Component
 import AdminPanel from "./components/AdminPanel";
+import PatientPortal from "./components/PatientPortal";
 
 export default function App() {
   // Navigation states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPatientPortalMode, setIsPatientPortalMode] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     return localStorage.getItem("df_dark_theme") === "true";
   });
@@ -614,7 +617,7 @@ export default function App() {
     <div className="font-sans min-h-screen flex flex-col selection:bg-teal-100 selection:text-teal-800 bg-[#F0F9F9] text-slate-800" id="main-container" dir="rtl">
       
       {/* 1. Header & Navigation (Floating Premium Bento Glass Pill) */}
-      {!isAdminMode && (
+      {!isAdminMode && !isPatientPortalMode && (
         <header id="app-header" className="fixed top-4 left-4 right-4 z-50 transition-all duration-300 max-w-7xl mx-auto">
           <div className={`px-6 rounded-[24px] transition-all duration-300 ${isScrolled ? "bg-white/75 backdrop-blur-md border border-white/50 shadow-xl shadow-teal-950/5 py-3" : "bg-white/45 backdrop-blur-md border border-white/20 py-4"}`} id="nav-container">
             <div className="flex items-center justify-between" id="nav-inner">
@@ -662,6 +665,13 @@ export default function App() {
               {/* CTA Actions */}
               <div className="hidden sm:flex items-center gap-4" id="header-cta-block">
                 <button
+                  onClick={() => setIsPatientPortalMode(true)}
+                  className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:text-teal-600 hover:border-teal-100 hover:bg-teal-50 transition-all font-bold text-[11px] cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>پورتال بیماران</span>
+                </button>
+                <button
                   onClick={() => setIsDarkTheme(!isDarkTheme)}
                   className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-yellow-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                   title={isDarkTheme ? "حالت روشن" : "حالت تاریک"}
@@ -687,6 +697,13 @@ export default function App() {
 
               {/* Mobile Actions */}
               <div className="flex items-center gap-2 lg:hidden" id="mobile-header-actions">
+                <button
+                  onClick={() => setIsPatientPortalMode(true)}
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 hover:text-teal-600 hover:bg-slate-50 transition-colors"
+                  title="پورتال بیماران"
+                >
+                  <User className="w-5 h-5" />
+                </button>
                 <button
                   onClick={() => setIsDarkTheme(!isDarkTheme)}
                   className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-yellow-400 hover:bg-slate-50 transition-colors"
@@ -739,14 +756,30 @@ export default function App() {
                     {link.label}
                   </a>
                 ))}
+                
+                <button
+                  onClick={() => {
+                    setIsPatientPortalMode(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="mt-2 py-3 px-3 rounded-xl bg-teal-50 text-teal-600 transition-colors text-sm font-black flex items-center justify-center gap-2 border-none cursor-pointer"
+                >
+                  <User className="w-4 h-4" />
+                  <span>ورود به پورتال بیماران</span>
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
         </header>
       )}
 
-      {/* 2. Admin Panel Mode Overlay & Tab Controller */}
-      {isAdminMode ? (
+      {/* 2. Patient Portal or Admin Panel or Main Site */}
+      {isPatientPortalMode ? (
+        <PatientPortal 
+          onBack={() => setIsPatientPortalMode(false)} 
+          clinicConfig={clinicConfig} 
+        />
+      ) : isAdminMode ? (
         <AdminPanel
           isAdminMode={isAdminMode}
           setIsAdminMode={setIsAdminMode}
