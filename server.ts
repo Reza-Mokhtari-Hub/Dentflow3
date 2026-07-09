@@ -96,52 +96,7 @@ function normalizeAdminCredentials(raw: any): AdminCredentials {
 }
 
 async function downloadImageIfExternal(url: string): Promise<string> {
-  if (!url || typeof url !== "string") return "";
-  
-  // If it's already a local path, don't download it
-  if (url.startsWith("/") || url.startsWith("data:") || !url.startsWith("http")) {
-    return url;
-  }
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn(`Failed to fetch external image from ${url}: ${response.status}`);
-      return url;
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-    let extension = ".jpg";
-    if (contentType.includes("png")) {
-      extension = ".png";
-    } else if (contentType.includes("webp")) {
-      extension = ".webp";
-    } else if (contentType.includes("gif")) {
-      extension = ".gif";
-    } else if (contentType.includes("svg")) {
-      extension = ".svg";
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
-
-    const uniqueFileName = `downloaded-${randomUUID()}${extension}`;
-    const filePath = path.join(uploadsDir, uniqueFileName);
-
-    await writeFile(filePath, buffer);
-    console.log(`Successfully downloaded external image ${url} to /uploads/${uniqueFileName}`);
-    
-    // Save downloaded image to MongoDB for persistence across serverless restarts
-    await saveImageToMongo(uniqueFileName, contentType || "image/jpeg", buffer.toString("base64"));
-    
-    return `/uploads/${uniqueFileName}`;
-  } catch (err) {
-    console.error(`Error downloading external image from ${url}:`, err);
-    return url;
-  }
+  return url;
 }
 
 const defaultPatients = [
@@ -1609,13 +1564,26 @@ ${existingContent}`;
         prompt = `یک مقاله علمی، کاملاً تخصصی، بسیار جذاب و مفید برای وبلاگ یک کلینیک دندانپزشکی پیشرفته با موضوع "${topic}" بنویس.
 این مقاله متعلق به دسته‌بندی "${category}" است.
 لحن: ${tone || "تخصصی"}، طول: ${length || "متوسط"}.
+
+نکته مهم در مورد عکس مقاله (imageUrl):
+به دلیل محدودیت‌ها، فیلترینگ و تحریم‌های تصاویر Unsplash در ایران، به هیچ عنوان از لینک‌های unsplash.com استفاده نکن. 
+به جای آن، حتماً یک آدرس تصویر باکیفیت و باز (بدون تحریم و بدون فیلتر در ایران) انتخاب کن. 
+ترجیحاً از آدرس‌های تصاویر دندانپزشکی عمومی و آزاد ویکی‌مدیا (Wikimedia Commons) که کاملاً در ایران در دسترس هستند استفاده کن.
+برخی از نمونه‌های تصویر معتبر و عالی ویکی‌مدیا برای موضوعات مختلف:
+- اگر موضوع مربوط به ایمپلنت یا جراحی است: "https://upload.wikimedia.org/wikipedia/commons/5/59/Dental_implants_on_model.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/7/7b/Dental_implants.jpg"
+- اگر موضوع مربوط به ارتودنسی است: "https://upload.wikimedia.org/wikipedia/commons/8/82/Dental_braces.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/0/0a/Braces_closeup.jpg"
+- اگر موضوع مربوط به زیبایی، کامپوزیت یا بلیچینگ است: "https://upload.wikimedia.org/wikipedia/commons/a/ae/Teeth_whitening_smile.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/3/33/A_clean_dental_smile.jpg"
+- اگر موضوع مربوط به بهداشت دهان و دندان یا مسواک است: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Brushing_teeth.jpg"
+- اگر موضوع مربوط به کودکان یا دندانپزشکی اطفال است: "https://upload.wikimedia.org/wikipedia/commons/7/77/Child_at_dentist_smiling.jpg"
+- برای سایر موضوعات عمومی یا کلینیک: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Dental_chair_and_instruments_in_contemporary_operatory_clinic.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/0/05/Routine_dental_checkup.jpg"
+
 خروجی باید حتماً به صورت یک شیء JSON با ساختار زیر باشد و هیچ متنی به جز JSON در خروجی نباشد:
 {
   "title": "یک عنوان جذاب، علمی و بسیار باکلاس به زبان فارسی",
   "excerpt": "یک خلاصه ترغیب‌کننده و جامع از مقاله شامل حداقل ۳ جمله کامل به زبان فارسی که کاربر را به خواندن کل مطلب تشویق کند",
   "category": "${category}",
   "readTime": "مدت زمان تقریبی مطالعه بر حسب دقیقه به فارسی",
-  "imageUrl": "یک آدرس تصویر باکیفیت از Unsplash مرتبط",
+  "imageUrl": "یک آدرس تصویر ویکی‌مدیا یا لینک کاملاً آزاد و بدون تحریم/فیلتر متناسب با موضوع دندانپزشکی که بالاتر نمونه دادیم",
   "content": "کل متن مقاله به صورت کامل در قالب فرمت HTML (فقط از تگ‌های h2, h3, p, ul, li, strong استفاده کن) به زبان فارسی."
 }`;
       }
