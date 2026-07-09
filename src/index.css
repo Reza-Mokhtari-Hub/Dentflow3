@@ -495,13 +495,13 @@ html.dark {
   background: #374151 !important;
 }
 
+.prose img { max-width: 100%; height: auto; } 
+.prose pre { white-space: pre-wrap !important; word-break: break-word !important; overflow-x: hidden !important; }
+
 /* Persian text wrapping fixes */
 .rtl-html-content,
 .prose {
   white-space: normal !important;
   word-break: normal !important;
-  overflow-wrap: anywhere !important;
+  overflow-wrap: break-word !important;
 }
-
-.prose img { max-width: 100%; height: auto; } 
-.prose pre { white-space: pre-wrap !important; word-break: break-word !important; overflow-x: hidden !important; }
