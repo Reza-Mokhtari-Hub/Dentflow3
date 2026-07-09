@@ -865,15 +865,84 @@ const authenticateAdmin = (req: express.Request, res: express.Response, next: ex
   next();
 };
 
-// Initialize Gemini API client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Helper to get Gemini API client dynamically (lazy initialization)
+function getGeminiClient(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey.trim() === "") {
+    return null;
+  }
+  
+  const trimmedKey = apiKey.trim();
+  const isOAuth = trimmedKey.startsWith("ya29.");
+  
+  if (isOAuth) {
+    // If it's a Google OAuth2 access token (starts with ya29.), we pass it in the Authorization header as a Bearer token.
+    // We temporarily remove the GEMINI_API_KEY environment variable so the SDK constructor doesn't automatically pick it up and use it as an API key.
+    const tempKey = process.env.GEMINI_API_KEY;
+    try {
+      delete process.env.GEMINI_API_KEY;
+      return new GoogleGenAI({
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+            'Authorization': `Bearer ${trimmedKey}`,
+          }
+        }
+      });
+    } finally {
+      process.env.GEMINI_API_KEY = tempKey;
+    }
+  } else {
+    // Standard API key (e.g., AIzaSy...)
+    return new GoogleGenAI({
+      apiKey: trimmedKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+}
+
+// Helper to generate content with automatic model fallback in case of high demand or availability issues
+async function generateWithModelFallback(
+  ai: any,
+  params: { contents: any; config?: any }
+) {
+  const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
+  let lastError: any = null;
+  
+  for (const model of models) {
+    try {
+      console.log(`[Gemini Fallback Engine] Attempting generation with model: ${model}`);
+      const response = await ai.models.generateContent({
+        ...params,
+        model: model,
+      });
+      console.log(`[Gemini Fallback Engine] Successfully generated content using model: ${model}`);
+      return response;
+    } catch (error: any) {
+      console.error(`[Gemini Fallback Engine] Error with model ${model}:`, error?.message || error);
+      lastError = error;
+      
+      // If it's an Authentication or Permission issue (401 / 403), do not retry because other models will fail similarly
+      const status = error?.status || error?.statusCode;
+      const errMsg = error?.message || "";
+      if (
+        status === 401 || 
+        status === 403 || 
+        errMsg.includes("UNAUTHENTICATED") || 
+        errMsg.includes("PERMISSION_DENIED") ||
+        errMsg.includes("invalid authentication credentials")
+      ) {
+        throw error;
+      }
     }
   }
-});
+  
+  throw lastError || new Error("All available Gemini models are currently busy or failed to respond.");
+}
 
 export async function createExpressApp() {
   const app = express();
@@ -1121,7 +1190,8 @@ export async function createExpressApp() {
         return res.status(400).json({ error: "پیام کاربر الزامی است." });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
+      const ai = getGeminiClient();
+      if (!ai) {
         return res.json({ text: "سلام! هم‌اکنون کلید هوش مصنوعی در سرور فعال نیست؛ کادر درمان ما به زودی با شما تماس خواهند گرفت یا می‌توانید از پنل رزرو آنلاین نوبت خود را نهایی کنید. 🦷✨" });
       }
 
@@ -1150,8 +1220,7 @@ export async function createExpressApp() {
         parts: [{ text: message }]
       });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await generateWithModelFallback(ai, {
         contents: formattedContents,
         config: {
           systemInstruction: customSystemInstruction || aiConfig.prompt || defaultSystemInstruction,
@@ -1506,7 +1575,8 @@ export async function createExpressApp() {
     try {
       const { topic, category, existingContent, mode, tone, length } = req.body;
 
-      if (!process.env.GEMINI_API_KEY) {
+      const ai = getGeminiClient();
+      if (!ai) {
         // Mock response if no API key
         if (mode === "refine") {
           return res.json({ content: (existingContent || "") + "\n\n[متن توسط هوش مصنوعی بهبود یافت - شبیه‌سازی]" });
@@ -1550,8 +1620,7 @@ ${existingContent}`;
 }`;
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await generateWithModelFallback(ai, {
         contents: prompt,
         config: mode === "refine" || mode === "continue" ? undefined : {
           responseMimeType: "application/json",
