@@ -34,7 +34,7 @@ export default function ArticlesSection({
           </button>
         </div>
         
-        <div className="bg-white rounded-[32px] overflow-hidden border border-slate-100 shadow-xl shadow-teal-950/5 flex flex-col">
+        <div className="bg-white rounded-[32px] overflow-hidden border border-slate-100 shadow-xl shadow-teal-950/5 flex flex-col" style={{ wordBreak: "keep-all" }}>
           {/* Header Cover Banner */}
           <div className="relative h-64 sm:h-96 bg-slate-100 shrink-0">
             <img 
@@ -68,7 +68,12 @@ export default function ArticlesSection({
           </div>
 
           {/* Article body */}
-          <div className="p-6 sm:p-10 overflow-y-auto space-y-6 flex-1 bg-slate-50/30" style={{ direction: "rtl" }}>
+          <div 
+            className="p-6 sm:p-10 overflow-x-hidden overflow-y-auto space-y-6 flex-1 bg-slate-50/30" 
+            style={{ 
+              direction: "rtl"
+            }}
+          >
             
             {/* Brief introduction card */}
             <div className="p-4 bg-teal-50/30 border-r-4 border-teal-500 rounded-l-2xl text-xs sm:text-sm text-teal-900 font-bold leading-relaxed shadow-sm">
@@ -76,7 +81,9 @@ export default function ArticlesSection({
             </div>
 
             {/* Full article rich text */}
-            <div className="prose prose-slate max-w-none text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base">
+            <div 
+              className="prose prose-slate max-w-none w-full overflow-hidden text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base"
+            >
               {renderMarkdown(selectedArticle.content || "")}
             </div>
 

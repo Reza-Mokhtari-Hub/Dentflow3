@@ -271,7 +271,8 @@ const AutoResizingTextarea: React.FC<AutoResizingTextareaProps> = ({ value, onCh
         onChange(e.target.value);
         adjustHeight();
       }}
-      className={`${className} overflow-hidden resize-none whitespace-pre-wrap break-words`}
+      className={`${className} overflow-hidden resize-none whitespace-pre-wrap`}
+      style={{ wordBreak: "keep-all" }}
       {...props}
     />
   );
@@ -284,7 +285,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   topic,
   category,
 }) => {
-  const [editorMode, setEditorMode] = useState<"block" | "simple">("block");
+  const [editorMode, setEditorMode] = useState<"block" | "simple">("simple");
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showAiMenu, setShowAiMenu] = useState(false);

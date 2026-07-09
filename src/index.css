@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @import "react-quill-new/dist/quill.snow.css";
 
 @theme {
@@ -494,3 +495,13 @@ html.dark {
   background: #374151 !important;
 }
 
+/* Persian text wrapping fixes */
+.rtl-html-content,
+.prose {
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.prose img { max-width: 100%; height: auto; } 
+.prose pre { white-space: pre-wrap !important; word-break: break-word !important; overflow-x: hidden !important; }

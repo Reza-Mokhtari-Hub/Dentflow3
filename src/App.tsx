@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   Shield, 
   Phone, 
@@ -557,6 +557,112 @@ export default function App() {
       saveLocalBookings(updated);
     }
   };
+
+  const validateAndFixArticles = useCallback((articleList: BlogPost[]) => {
+    let modified = false;
+    const fixedArticles = articleList.map(article => {
+      if (!article.content) return article;
+      try {
+        if (article.content.trim().startsWith('[')) {
+          const blocks = JSON.parse(article.content);
+          if (Array.isArray(blocks)) {
+            // Convert legacy JSON blocks format to semantic HTML
+            const htmlContent = blocks.map((block: any) => {
+              switch (block.type) {
+                case "heading": {
+                  let text = "";
+                  let level = "h2";
+                  if (typeof block.value === "string") {
+                    text = block.value;
+                  } else if (block.value) {
+                    text = block.value.text || "";
+                    level = block.value.level || "h2";
+                  }
+                  return `<${level}>${text}</${level}>`;
+                }
+                case "text":
+                  return `<p>${block.value || ""}</p>`;
+                case "quote": {
+                  let text = "";
+                  let author = "";
+                  if (typeof block.value === "string") {
+                    text = block.value;
+                  } else if (block.value) {
+                    text = block.value.text || "";
+                    author = block.value.author || "";
+                  }
+                  const authorAttr = author ? ` data-author="${author}"` : "";
+                  return `<blockquote${authorAttr}><p>${text}</p>${author ? `<cite>— ${author}</cite>` : ""}</blockquote>`;
+                }
+                case "list": {
+                  let items: string[] = [];
+                  let listType = "bullet";
+                  if (Array.isArray(block.value)) {
+                    items = block.value;
+                  } else if (block.value) {
+                    items = block.value.items || [""];
+                    listType = block.value.listType || "bullet";
+                  }
+                  const tag = listType === "ordered" ? "ol" : "ul";
+                  const itemsHtml = items.map((it: string) => `<li>${it}</li>`).join("");
+                  return `<${tag}>${itemsHtml}</${tag}>`;
+                }
+                case "image": {
+                  let url = "";
+                  let caption = "";
+                  if (typeof block.value === "string") {
+                    url = block.value;
+                  } else if (block.value) {
+                    url = block.value.url || "";
+                    caption = block.value.caption || "";
+                  }
+                  return `<img src="${url}" alt="${caption}" style="max-width:100%; border-radius:12px; margin: 16px 0; display: block;" />`;
+                }
+                case "video": {
+                  let url = "";
+                  let caption = "";
+                  if (typeof block.value === "string") {
+                    url = block.value;
+                  } else if (block.value) {
+                    url = block.value.url || "";
+                    caption = block.value.caption || "";
+                  }
+                  return `<div class="dental-video-container" style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:12px; margin: 16px 0;"><iframe src="${url}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen></iframe></div><p style="text-align:center; font-size:12px; color:#64748b; margin-top:-8px;">${caption}</p>`;
+                }
+                case "divider":
+                  return `<hr style="border:0; border-top: 1px dashed #cbd5e1; margin: 24px 0;" />`;
+                default:
+                  return "";
+              }
+            }).join("\n");
+            
+            modified = true;
+            return { ...article, content: htmlContent };
+          }
+        }
+      } catch (e) {
+        // Not a JSON string, ignore
+      }
+      return article;
+    });
+
+    if (modified) {
+      console.log("Article structures fixed!");
+      setArticles(fixedArticles);
+      localStorage.setItem("df_local_articles", JSON.stringify(fixedArticles));
+    }
+  }, []);
+
+  useEffect(() => {
+    // Run the validation once when articles are loaded
+    if (articles.length > 0) {
+      // Only execute if not all articles have valid content (e.g. they contain JSON string arrays)
+      const needsFix = articles.some(a => a.content && a.content.trim().startsWith('['));
+      if (needsFix) {
+        validateAndFixArticles(articles);
+      }
+    }
+  }, [articles, validateAndFixArticles]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();

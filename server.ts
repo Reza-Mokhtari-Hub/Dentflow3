@@ -873,7 +873,18 @@ async function generateWithModelFallback(
   ai: any,
   params: { contents: any; config?: any }
 ) {
-  const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
+  const models = [
+    "gemini-3.5-flash",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-pro-exp-02-05",
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite"
+  ];
   let lastError: any = null;
   
   for (const model of models) {
@@ -890,6 +901,7 @@ async function generateWithModelFallback(
       lastError = error;
       
       // If it's an Authentication or Permission issue (401 / 403), do not retry because other models will fail similarly
+      // We explicitly ALLOW retries for 429 / RESOURCE_EXHAUSTED as per user request to try next model on limit
       const status = error?.status || error?.statusCode;
       const errMsg = error?.message || "";
       if (
@@ -1591,8 +1603,8 @@ ${existingContent}`;
   "excerpt": "یک خلاصه ترغیب‌کننده و جامع از مقاله شامل حداقل ۳ جمله کامل به زبان فارسی که کاربر را به خواندن کل مطلب تشویق کند",
   "category": "${category}",
   "readTime": "مدت زمان تقریبی مطالعه بر حسب دقیقه به فارسی",
-  "imageUrl": "یک آدرس تصویر ویکی‌مدیا یا لینک کاملاً آزاد و بدون تحریم/فیلتر متناسب با موضوع دندانپزشکی که بالاتر نمونه دادیم",
-  "content": "کل متن مقاله به صورت کامل در قالب فرمت HTML (فقط از تگ‌های h2, h3, p, ul, li, strong استفاده کن) به زبان فارسی."
+  "imageUrl": "یک آدرس تصویر ویکی‌مدیا متناسب با موضوع",
+  "content": "متن کامل مقاله با ساختار غنی HTML شامل تگ‌های <h2>, <h3>, <p>, <strong>, <em>, <ul>, <li> و <blockquote>. حتماً از پاراگراف‌بندی مناسب، لیست‌های مرتب، نقل‌قول‌های زیبا و بولد کردن کلمات کلیدی استفاده کن تا از نظر ظاهری بسیار جذاب و خوانا باشد."
 }`;
       }
 
@@ -1620,9 +1632,14 @@ ${existingContent}`;
       } else {
         res.json(JSON.parse(response.text || "{}"));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Generation Error:", error);
-      res.status(500).json({ error: "خطا در تولید محتوا با هوش مصنوعی." });
+      const status = error?.status || error?.statusCode;
+      const errMsg = error?.message || "";
+      if (status === 429 || errMsg.includes("RESOURCE_EXHAUSTED")) {
+        return res.status(429).json({ error: "سهمیه درخواست شما به پایان رسیده است. لطفا چند دقیقه دیگر تلاش کنید.", details: errMsg });
+      }
+      res.status(500).json({ error: "خطا در تولید محتوا با هوش مصنوعی.", details: errMsg });
     }
   });
   // --- PATIENT PORTAL API ---

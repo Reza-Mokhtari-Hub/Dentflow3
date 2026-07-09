@@ -103,7 +103,7 @@ export function renderMarkdown(contentStr: string) {
   if (isHtml) {
     return (
       <div 
-        className="prose prose-slate max-w-none text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base rtl-html-content"
+        className="prose prose-slate max-w-none w-full overflow-hidden text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base rtl-html-content"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentStr) }}
         style={{ direction: "rtl", textAlign: "right" }}
       />
@@ -545,7 +545,12 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
       });
 
       if (!response.ok) {
-        throw new Error("خطا در پاسخ سرور");
+        let errMessage = "خطا در پاسخ سرور";
+        try {
+          const errData = await response.json();
+          if (errData && errData.error) errMessage = errData.error;
+        } catch(e) {}
+        throw new Error(errMessage);
       }
 
       const data = await response.json();
@@ -565,9 +570,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
       setFormActiveTab("content"); // Auto switch to editor tab to let them see the content!
       setTopicPrompt("");
       showStatus("success", "مقاله کامل به همراه متن اختصاصی تولید و در ادیتور بارگذاری شد! لطفا آن را مرور و ذخیره کنید.");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showStatus("error", "خطا در برقراری ارتباط با هوش مصنوعی جمینای. لطفاً اتصال شبکه را بررسی کنید.");
+      showStatus("error", error?.message || "خطا در برقراری ارتباط با هوش مصنوعی جمینای. لطفاً اتصال شبکه را بررسی کنید.");
     } finally {
       setIsGenerating(false);
     }
@@ -1355,7 +1360,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
 
                     {/* Centered card mockup */}
                     <div className="flex justify-center py-4 bg-slate-100/50 rounded-3xl">
-                      <div className="bg-white border border-slate-100 rounded-[28px] overflow-hidden shadow-xl shadow-slate-950/5 flex flex-col justify-between w-80 text-right">
+                      <div className="bg-white border border-slate-100 rounded-[28px] overflow-hidden shadow-xl shadow-slate-950/5 flex flex-col justify-between w-80 text-right" style={{ wordBreak: "keep-all" }}>
                         <div>
                           {/* Banner image */}
                           <div className="aspect-video w-full overflow-hidden relative bg-slate-100">
@@ -1494,6 +1499,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
               <div 
                 key={article.id}
                 className="border border-slate-100 rounded-2xl p-4 flex flex-col justify-between gap-4 hover:border-teal-100 hover:shadow-md hover:shadow-teal-900/5 transition-all bg-white"
+                style={{ wordBreak: "keep-all" }}
               >
                 <div className="flex gap-4">
                   {/* Photo thumbnail */}
