@@ -116,6 +116,14 @@
   overflow: hidden !important;
 }
 
+.premium-quill-wrapper .quill {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
 .premium-quill-wrapper .ql-editor {
   flex: 1 1 0% !important;
   overflow-y: auto !important;

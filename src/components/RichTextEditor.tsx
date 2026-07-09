@@ -240,6 +240,43 @@ function serializeBlocksToHtml(blocks: Block[]): string {
 
 const QuillComponent = ReactQuill as any;
 
+interface AutoResizingTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange"> {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+const AutoResizingTextarea: React.FC<AutoResizingTextareaProps> = ({ value, onChange, className, ...props }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      adjustHeight();
+    }, 10);
+    return () => clearTimeout(timer);
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onChange={(e) => {
+        onChange(e.target.value);
+        adjustHeight();
+      }}
+      className={`${className} overflow-hidden resize-none whitespace-pre-wrap break-words`}
+      {...props}
+    />
+  );
+};
+
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   value,
   onChange,
@@ -266,19 +303,33 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     return document.documentElement.classList.contains("dark") || localStorage.getItem("df_dark_theme") === "true";
   });
 
+  // Keep editor theme state in perfect sync with the document root's theme
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsEditorDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
   const toggleTheme = () => {
-    const root = document.getElementById("main-container");
-    const isDark = document.documentElement.classList.contains("dark");
-    if (isDark) {
-      document.documentElement.classList.remove("dark");
-      root?.classList.remove("dark");
-      localStorage.setItem("df_dark_theme", "false");
-      setIsEditorDark(false);
+    const themeBtn = document.getElementById("theme-toggle-floating");
+    if (themeBtn) {
+      themeBtn.click();
     } else {
-      document.documentElement.classList.add("dark");
-      root?.classList.add("dark");
-      localStorage.setItem("df_dark_theme", "true");
-      setIsEditorDark(true);
+      const root = document.getElementById("main-container");
+      const isDark = document.documentElement.classList.contains("dark");
+      if (isDark) {
+        document.documentElement.classList.remove("dark");
+        root?.classList.remove("dark");
+        localStorage.setItem("df_dark_theme", "false");
+        setIsEditorDark(false);
+      } else {
+        document.documentElement.classList.add("dark");
+        root?.classList.add("dark");
+        localStorage.setItem("df_dark_theme", "true");
+        setIsEditorDark(true);
+      }
     }
   };
 
@@ -823,9 +874,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
                   {block.type === "text" && (
                     <div className="relative">
-                      <textarea
+                      <AutoResizingTextarea
                         value={block.value || ""}
-                        onChange={(e) => handleBlockChange(block.id, e.target.value)}
+                        onChange={(val) => handleBlockChange(block.id, val)}
                         placeholder="توضیحات و محتوای علمی خود را در این پاراگراف بنویسید..."
                         className="w-full px-3 py-2 border border-slate-100 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:border-teal-500 bg-transparent min-h-[80px] leading-relaxed resize-none"
                       />
@@ -849,9 +900,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
                   {block.type === "quote" && (
                     <div className="space-y-2 p-3 bg-teal-50/50 dark:bg-teal-950/10 rounded-xl border-r-4 border-teal-500">
-                      <textarea
+                      <AutoResizingTextarea
                         value={block.value?.text || ""}
-                        onChange={(e) => handleBlockChange(block.id, { ...block.value, text: e.target.value })}
+                        onChange={(val) => handleBlockChange(block.id, { ...block.value, text: val })}
                         placeholder="نقل قول برجسته یا پیام کلیدی علمی را وارد کنید..."
                         className="w-full bg-transparent border-none text-sm text-teal-900 dark:text-teal-200 focus:outline-none font-medium leading-relaxed resize-none min-h-[60px]"
                       />
