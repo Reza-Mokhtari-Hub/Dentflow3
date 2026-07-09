@@ -3,6 +3,8 @@ import { toast } from "../lib/toast";
 import { CheckCircle, Search, User, Phone, Lock, Check, AlertCircle, MapPin, Clock, Map, Info, FolderHeart, Camera } from "lucide-react";
 import { Service } from "../data";
 import { AnimatePresence, motion } from "motion/react";
+import JalaliDatePicker from "./JalaliDatePicker";
+import { toPersianDigits } from "../lib/jalali";
 
 interface BookingSectionProps {
   selectedServiceId: string;
@@ -279,13 +281,20 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                       <div className="space-y-1.5" id="form-group-date">
                         <label htmlFor="date" className="block text-xs sm:text-sm font-bold text-slate-700">تاریخ حدودی مد نظر</label>
                         <div className="relative" id="date-input-wrapper">
-                          <input
-                            type="date"
-                            id="date"
-                            name="date"
+                          <JalaliDatePicker
                             value={formData.date}
-                            onChange={handleFormChange}
-                            className={`w-full px-4 py-3 rounded-xl bg-[#F8FCFC] border ${formErrors.date ? "border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-teal-500 focus:ring-teal-500"} text-slate-800 text-sm focus:outline-none focus:ring-2`}
+                            onChange={(val) => {
+                              setFormData((prev) => ({ ...prev, date: val }));
+                              if (formErrors.date) {
+                                setFormErrors((prev) => {
+                                  const next = { ...prev };
+                                  delete next.date;
+                                  return next;
+                                });
+                              }
+                            }}
+                            placeholder="مثال: ۱۴۰۵/۰۴/۱۸"
+                            disablePastDates={true}
                           />
                         </div>
                         {formErrors.date && <p className="text-[11px] text-rose-500 font-semibold" id="err-date">{formErrors.date}</p>}
@@ -403,7 +412,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                         </div>
                         <div id="ticket-detail-date">
                           <span className="text-slate-400 block font-bold">تاریخ حدودی:</span>
-                          <span className="text-slate-800 font-bold mt-1 block">{formData.date}</span>
+                          <span className="text-slate-800 font-bold mt-1 block">{toPersianDigits(formData.date)}</span>
                         </div>
                       </div>
                     </div>
@@ -543,7 +552,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                       </div>
                       <div className="space-y-1">
                         <span className="text-slate-400 text-[10px] sm:text-xs block">تاریخ نوبت:</span>
-                        <span className="text-slate-900 block font-mono">{trackedBooking.date}</span>
+                        <span className="text-slate-900 block font-mono">{toPersianDigits(trackedBooking.date)}</span>
                       </div>
                       <div className="space-y-1">
                         <span className="text-slate-400 text-[10px] sm:text-xs block">زمان/شیفت نوبت:</span>

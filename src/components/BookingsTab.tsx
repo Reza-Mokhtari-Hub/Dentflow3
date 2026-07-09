@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { toast } from "../lib/toast";
 import { motion, AnimatePresence } from "motion/react";
 import { Calendar, Edit3, Check, X, Trash2, Save, RefreshCw, Mail } from "lucide-react";
+import JalaliDatePicker from "./JalaliDatePicker";
+import { toPersianDigits } from "../lib/jalali";
 
 interface Booking {
   id: string;
@@ -247,7 +249,7 @@ export default function BookingsTab({
                         </div>
                         <div>
                           <span className="text-slate-400 font-bold block text-[11px]">تاریخ و شیفت:</span>
-                          <span className="font-bold text-slate-800 block mt-0.5">{b.date} ({b.timeSlot === "morning" ? (clinicConfig?.shiftMorningName || "شیفت صبح") : (clinicConfig?.shiftAfternoonName || "شیفت عصر")})</span>
+                          <span className="font-bold text-slate-800 block mt-0.5">{toPersianDigits(b.date)} ({b.timeSlot === "morning" ? (clinicConfig?.shiftMorningName || "شیفت صبح") : (clinicConfig?.shiftAfternoonName || "شیفت عصر")})</span>
                         </div>
                       </div>
 
@@ -348,11 +350,11 @@ export default function BookingsTab({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                           <label className="text-slate-500 font-bold block">تاریخ تایید شده نهایی:</label>
-                          <input 
-                            type="date"
+                          <JalaliDatePicker
                             value={editDate}
-                            onChange={(e) => setEditDate(e.target.value)}
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white text-slate-800 font-bold"
+                            onChange={(val) => setEditDate(val)}
+                            placeholder="مثال: ۱۴۰۵/۰۴/۱۸"
+                            disablePastDates={false}
                           />
                         </div>
                         <div className="space-y-1">
