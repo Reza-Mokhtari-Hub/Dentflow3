@@ -216,6 +216,10 @@ export default function App() {
       workingHours: "شنبه تا چهارشنبه ۹:۰۰ الی ۲۱:۰۰ | پنجشنبه ۹:۰۰ الی ۱۵:۰۰",
       doctorName: "دکتر مختاری",
       doctorTitle: "جراح و دندانپزشک زیبایی - فلوشیپ ایمپلنتولوژی دیجیتال از سوئیس",
+      articleDoctorName: "دکتر مریم رضایی",
+      articleDoctorTitle: "متخصص جراحی لثه و ایمپلنت",
+      articleDoctorBio: "عضو هیئت علمی دانشگاه، با بیش از ۱۰ سال سابقه تخصصی در کاشت دندان دیجیتال و اصلاح لبخند هوشمند.",
+      articleDoctorAvatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=250&auto=format&fit=crop",
       aboutDesc: "هدف ما در دنت فلو برطرف کردن ترس‌ها و دغدغه‌های همیشگی شما از دندانپزشکی است. ما معتقدیم کیفیت و دقت در درمان حق بیمار است و با گردهم‌آوری بهترین متخصصان، به کارگیری فناوری سه‌بعدی دیجیتال و دکوراسیون پزشکی آرامش‌بخش، فضایی رویایی برای درمان به وجود آورده‌ایم.",
       installmentInfo: "۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود",
       shiftMorningName: "شیفت صبح",
@@ -978,7 +982,7 @@ export default function App() {
                 <div id="home-assistant-wrapper" className="pt-8">
                   <div className="text-center space-y-2 mb-10">
                     <span className="text-xs font-black text-teal-600 bg-teal-50 px-3 py-1 rounded-full uppercase tracking-wider">مشاوره هوشمند ۲۴ ساعته</span>
-                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">دستیار صوتی و متنی هوشمند دنت فلو</h2>
+                    <h2 className="text-3xl font-extrabold text-slate-900">دستیار صوتی و متنی هوشمند دنت فلو</h2>
                     <p className="text-slate-500 text-xs sm:text-sm font-semibold max-w-2xl mx-auto">به راحتی با دستیار کلینیک صحبت کنید و در ثانیه پاسخ‌های خود درباره خدمات، قیمت‌ها و مراقبت‌ها را دریافت کنید</p>
                   </div>
                   <AiAssistantSection 
@@ -999,13 +1003,14 @@ export default function App() {
                 <div id="home-articles-wrapper" className="pt-8">
                   <div className="text-center space-y-2 mb-10">
                     <span className="text-xs font-black text-teal-600 bg-teal-50 px-3 py-1 rounded-full uppercase tracking-wider">مجله سلامت دهان و دندان</span>
-                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">آخرین دانستنی‌ها و مقالات دندانپزشکی دیجیتال</h2>
+                    <h2 className="text-3xl font-extrabold text-slate-900">آخرین دانستنی‌ها و مقالات دندانپزشکی دیجیتال</h2>
                     <p className="text-slate-500 text-xs sm:text-sm font-semibold max-w-2xl mx-auto">با مطالعه مقالات تایید شده توسط متخصصین دنت فلو، لبخند سالم‌تر و زیباتری داشته باشید</p>
                   </div>
                   <ArticlesSection 
                     articles={articles}
                     selectedArticle={selectedArticle}
                     setSelectedArticle={setSelectedArticle}
+                    clinicConfig={clinicConfig}
                   />
                 </div>
               </motion.div>
@@ -1085,6 +1090,8 @@ export default function App() {
                   articles={articles}
                   selectedArticle={selectedArticle}
                   setSelectedArticle={setSelectedArticle}
+                  clinicConfig={clinicConfig}
+                  setArticles={setArticles}
                 />
               </motion.div>
             )}

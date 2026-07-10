@@ -45,6 +45,7 @@ export interface BlogPost {
   readTime: string;
   imageUrl: string;
   content?: string;
+  likes?: number;
 }
 
 export interface SmileCase {

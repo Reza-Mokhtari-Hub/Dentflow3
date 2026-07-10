@@ -16,6 +16,10 @@ interface ClinicConfig {
   shiftMorningCapacity?: number;
   shiftAfternoonName?: string;
   shiftAfternoonCapacity?: number;
+  articleDoctorName?: string;
+  articleDoctorTitle?: string;
+  articleDoctorBio?: string;
+  articleDoctorAvatar?: string;
 }
 
 interface ContactMessage {
@@ -382,6 +386,51 @@ export default function ContactTab({
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm resize-none"
               rows={2}
             />
+          </div>
+
+          <div className="pt-4 pb-2 border-b border-slate-100 flex items-center gap-2 text-teal-700">
+            <MessageSquare className="w-5 h-5 text-teal-600" />
+            <h4 className="font-extrabold text-sm">تنظیمات پزشک نویسنده مقالات علمی (بخش جزئیات مقالات)</h4>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1">
+              <label className="text-slate-500 font-bold block">نام پزشک مقالات:</label>
+              <input
+                type="text"
+                value={clinicConfig.articleDoctorName || "دکتر مریم رضایی"}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, articleDoctorName: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-slate-500 font-bold block">تخصص و عنوان پزشک مقالات:</label>
+              <input
+                type="text"
+                value={clinicConfig.articleDoctorTitle || "متخصص جراحی لثه و ایمپلنت"}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, articleDoctorTitle: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-slate-500 font-bold block">آدرس تصویر پزشک مقالات (عکس):</label>
+              <input
+                type="text"
+                value={clinicConfig.articleDoctorAvatar || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=250&auto=format&fit=crop"}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, articleDoctorAvatar: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm text-left"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-slate-500 font-bold block">بیوگرافی و معرفی پزشک مقالات:</label>
+              <textarea
+                value={clinicConfig.articleDoctorBio || "عضو هیئت علمی دانشگاه، با بیش از ۱۰ سال سابقه تخصصی در کاشت دندان دیجیتال و اصلاح لبخند هوشمند."}
+                onChange={(e) => setClinicConfig({ ...clinicConfig, articleDoctorBio: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-white font-bold text-slate-700 text-sm resize-none"
+                rows={2}
+              />
+            </div>
           </div>
 
           <div className="pt-4 pb-2 border-b border-slate-100 flex items-center gap-2 text-indigo-700">

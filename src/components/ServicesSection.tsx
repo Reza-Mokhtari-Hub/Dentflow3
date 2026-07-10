@@ -19,7 +19,7 @@ export default function ServicesSection({ services, onSelectServiceAndBook }: Se
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-600 text-xs font-bold border border-teal-100" id="services-badge">
           <span>چه خدماتی ارائه می‌دهیم؟</span>
         </div>
-        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight" id="services-title">خدمات تخصصی و فوق‌مدرن کلینیک دنت فلو</h2>
+        <h2 className="text-3xl font-extrabold text-slate-900" id="services-title">خدمات تخصصی و فوق‌مدرن کلینیک دنت فلو</h2>
         <p className="text-slate-500 text-sm sm:text-base leading-relaxed font-semibold" id="services-desc">
           ما دایره کاملی از نیازهای بهداشتی، درمانی و زیبایی دهان و دندان شما را به کمک فناوری روز دنیا و متریال تضمین‌شده بین‌المللی پوشش می‌دهیم. برای مشاهده جزئیات روی هر خدمت کلیک کنید.
         </p>

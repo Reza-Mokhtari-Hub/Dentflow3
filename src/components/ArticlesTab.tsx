@@ -31,7 +31,11 @@ import {
   HelpCircle,
   CheckCircle,
   Bookmark,
-  ChevronLeft
+  ChevronLeft,
+  MessageSquare,
+  Reply,
+  User,
+  Heart
 } from "lucide-react";
 
 interface BlogPost {
@@ -43,6 +47,7 @@ interface BlogPost {
   readTime: string;
   imageUrl: string;
   content?: string;
+  likes?: number;
 }
 
 interface ArticlesTabProps {
@@ -384,6 +389,21 @@ const articleTemplates = [
 ];
 
 export default function ArticlesTab({ articles, setArticles, useLocalDb, adminToken }: ArticlesTabProps) {
+  const [subActiveTab, setSubActiveTab] = useState<"articles" | "comments">("articles");
+  const [comments, setComments] = useState<Record<number, any[]>>({});
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({}); // key is "postId-commentIndex"
+
+  React.useEffect(() => {
+    try {
+      const storedComments = localStorage.getItem("dentflow_blog_comments");
+      if (storedComments) {
+        setComments(JSON.parse(storedComments));
+      }
+    } catch (e) {
+      console.error("Could not load comments inside ArticlesTab", e);
+    }
+  }, [subActiveTab]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("همه");
   const [isEditing, setIsEditing] = useState(false);
@@ -479,6 +499,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formContent, setFormContent] = useState("");
+  const [formLikes, setFormLikes] = useState<number>(0);
 
 
   const showStatus = (type: "success" | "error", text: string) => {
@@ -497,6 +518,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     setFormImageUrl("https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=600&auto=format&fit=crop");
     setFormDate(new Date().toLocaleDateString("fa-IR"));
     setFormContent("");
+    setFormLikes(0);
     setFormActiveTab("general");
     setIsEditing(true);
   };
@@ -510,6 +532,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     setFormImageUrl(article.imageUrl);
     setFormDate(article.date);
     setFormContent(article.content || "");
+    setFormLikes(article.likes !== undefined ? article.likes : (article.id * 7 + 18));
     setFormActiveTab("general");
     setIsEditing(true);
     // Smooth scroll to top of form
@@ -600,7 +623,8 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
       readTime: formReadTime,
       imageUrl: formImageUrl || "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=600&auto=format&fit=crop",
       date: formDate || new Date().toLocaleDateString("fa-IR"),
-      content: formContent
+      content: formContent,
+      likes: formLikes
     };
 
     if (useLocalDb) {
@@ -687,6 +711,63 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     }
   };
 
+  const handleSaveReply = (postId: number, commentIndex: number) => {
+    const replyKey = `${postId}-${commentIndex}`;
+    const text = replyTexts[replyKey]?.trim();
+    if (!text) {
+      showStatus("error", "متن پاسخ نمی‌تواند خالی باشد.");
+      return;
+    }
+
+    try {
+      const updatedComments = { ...comments };
+      if (updatedComments[postId] && updatedComments[postId][commentIndex]) {
+        updatedComments[postId][commentIndex] = {
+          ...updatedComments[postId][commentIndex],
+          reply: text,
+          replyDate: new Date().toLocaleDateString("fa-IR")
+        };
+        setComments(updatedComments);
+        localStorage.setItem("dentflow_blog_comments", JSON.stringify(updatedComments));
+        showStatus("success", "پاسخ پزشک با موفقیت ثبت شد و به بیمار نمایش داده می‌شود.");
+        
+        // Clear reply text input
+        setReplyTexts(prev => {
+          const next = { ...prev };
+          delete next[replyKey];
+          return next;
+        });
+      }
+    } catch (e) {
+      console.error("Error saving comment reply", e);
+      showStatus("error", "خطا در ثبت پاسخ.");
+    }
+  };
+
+  const handleDeleteComment = (postId: number, commentIndex: number) => {
+    if (!window.confirm("آیا از حذف این دیدگاه/پرسش علمی اطمینان دارید؟ این عمل غیرقابل بازگشت است.")) {
+      return;
+    }
+
+    try {
+      const updatedComments = { ...comments };
+      if (updatedComments[postId]) {
+        updatedComments[postId] = updatedComments[postId].filter((_, idx) => idx !== commentIndex);
+        
+        if (updatedComments[postId].length === 0) {
+          delete updatedComments[postId];
+        }
+        
+        setComments(updatedComments);
+        localStorage.setItem("dentflow_blog_comments", JSON.stringify(updatedComments));
+        showStatus("success", "پرسش مورد نظر با موفقیت حذف شد.");
+      }
+    } catch (e) {
+      console.error("Error deleting comment", e);
+      showStatus("error", "خطا در حذف دیدگاه.");
+    }
+  };
+
   // Filter and Search logic
   const filteredArticles = articles.filter(article => {
     const matchesSearch = 
@@ -744,6 +825,32 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
         </div>
       </div>
 
+      {/* Sub-tab selection bar */}
+      <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-fit gap-1 mr-auto flex-row-reverse" id="articles-subtabs-toggle">
+        <button
+          onClick={() => setSubActiveTab("articles")}
+          className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 justify-center ${
+            subActiveTab === "articles"
+              ? "bg-white text-teal-600 shadow-sm border border-slate-200/50"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>نگارش و مدیریت مقالات علمی</span>
+        </button>
+        <button
+          onClick={() => setSubActiveTab("comments")}
+          className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 justify-center ${
+            subActiveTab === "comments"
+              ? "bg-white text-teal-600 shadow-sm border border-slate-200/50"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>پاسخ به سوالات بیماران زیر مقالات</span>
+        </button>
+      </div>
+
       {/* Dynamic Status Messages */}
       <AnimatePresence>
         {statusMessage && (
@@ -763,8 +870,10 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
         )}
       </AnimatePresence>
 
-      {/* Advanced AI Generator Dashboard */}
-      <div className="bg-gradient-to-r from-teal-500/5 to-indigo-500/5 border border-teal-100/60 rounded-[32px] p-6 space-y-5" id="ai-article-generator">
+      {subActiveTab === "articles" ? (
+        <>
+          {/* Advanced AI Generator Dashboard */}
+          <div className="bg-gradient-to-r from-teal-500/5 to-indigo-500/5 border border-teal-100/60 rounded-[32px] p-6 space-y-5" id="ai-article-generator">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2 justify-end self-end sm:self-auto">
             <span className="text-slate-800 font-black text-sm">مولد و نویسنده هوشمند مقاله با هوش مصنوعی جمینای (Gemini)</span>
@@ -1037,6 +1146,18 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         value={formDate}
                         onChange={(e) => setFormDate(e.target.value)}
                         placeholder="مثال: ۱۵ تیر ۱۴۰۵"
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl text-xs font-bold text-slate-800 outline-none text-right"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-extrabold text-slate-500 block">تعداد پسندها (لایک‌ها)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formLikes}
+                        onChange={(e) => setFormLikes(Math.max(0, parseInt(e.target.value) || 0))}
+                        placeholder="مثال: ۴۲"
                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl text-xs font-bold text-slate-800 outline-none text-right"
                       />
                     </div>
@@ -1548,6 +1669,10 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                   </div>
 
                   <div className="flex items-center gap-3 text-[9px] text-slate-400 font-bold">
+                    <span className="flex items-center gap-1 text-rose-500 font-extrabold">
+                      <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                      <span>{article.likes !== undefined ? article.likes : (article.id * 7 + 18)} پسند</span>
+                    </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
                       {article.readTime}
@@ -1563,6 +1688,141 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
           </div>
         )}
       </div>
+        </>
+      ) : (
+        /* Comment & Question Answering Panel */
+        <div className="space-y-6" id="comments-moderation-panel">
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 shadow-sm text-right">
+            <div className="border-b border-slate-100 pb-4">
+              <h4 className="text-base font-black text-slate-800 flex items-center gap-2 justify-end">
+                <span>مدیریت پرسش‌ها و نظرات علمی بیماران</span>
+                <MessageSquare className="w-5 h-5 text-teal-600" />
+              </h4>
+              <p className="text-xs text-slate-400 font-bold leading-relaxed mt-1">
+                دیدگاه‌ها، سوالات و مکاتبات ارسالی بیماران را زیر مقالات علمی کلینیک دنت فلو مشاهده کرده و مستقیماً پاسخ پزشک را ثبت کنید. پاسخ‌های شما بلافاصله زیر هر مقاله نمایش داده می‌شود.
+              </p>
+            </div>
+
+            {(() => {
+              const articlesWithComments = articles.filter(art => comments[art.id] && comments[art.id].length > 0);
+
+              if (articlesWithComments.length === 0) {
+                return (
+                  <div className="text-center py-16 text-slate-400 text-xs font-bold space-y-3 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+                    <MessageSquare className="w-12 h-12 mx-auto text-slate-300 opacity-60" />
+                    <p className="text-sm">هیچ پرسش یا نظری تاکنون برای مقالات علمی ثبت نشده است.</p>
+                    <p className="text-[10px] text-slate-400 font-normal">بیماران با مراجعه به جزئیات هر مقاله می‌توانند سوالات خود را مطرح نمایند.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-6">
+                  {articlesWithComments.map((art) => {
+                    const postComments = comments[art.id] || [];
+                    return (
+                      <div key={art.id} className="border border-slate-100 rounded-3xl p-5 bg-slate-50/30 space-y-4 hover:border-teal-100 transition-all">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100/80 pb-3">
+                          <span className="text-[10px] bg-teal-50 text-teal-700 px-3 py-1 rounded-full font-black w-fit">
+                            دسته‌بندی: {art.category}
+                          </span>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 font-bold">دیدگاه‌های مقاله علمی:</span>
+                            <h5 className="text-xs font-black text-slate-800 hover:text-teal-600 transition-colors mt-0.5">
+                              « {art.title} »
+                            </h5>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          {postComments.map((comment, idx) => {
+                            const replyKey = `${art.id}-${idx}`;
+                            const isReplied = !!comment.reply;
+                            
+                            return (
+                              <div key={idx} className="p-4 bg-white border border-slate-100 rounded-2xl flex flex-col md:flex-row gap-4 justify-between text-right relative hover:shadow-sm hover:border-slate-200 transition-all">
+                                
+                                <div className="space-y-3 flex-1">
+                                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
+                                    <span className="text-[10px] text-slate-400 font-bold font-sans">{comment.date}</span>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="text-xs font-black text-slate-700">{comment.name}</h4>
+                                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                                        <User className="w-3.5 h-3.5 text-slate-500" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                    {comment.text}
+                                  </p>
+
+                                  {isReplied ? (
+                                    <div className="p-3 bg-teal-50/40 border border-teal-100 rounded-xl text-xs text-slate-700 font-semibold space-y-1">
+                                      <div className="flex justify-between items-center border-b border-teal-100/30 pb-1 mb-1">
+                                        <span className="text-[9px] text-slate-400 font-bold font-sans">{comment.replyDate || comment.date}</span>
+                                        <span className="font-black text-teal-600 flex items-center gap-1">
+                                          <span>پاسخ ثبت شده پزشک</span>
+                                          <Sparkles className="w-3 h-3 animate-pulse" />
+                                        </span>
+                                      </div>
+                                      <p className="leading-relaxed text-slate-600">{comment.reply}</p>
+                                    </div>
+                                  ) : (
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-black border border-amber-100">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                      <span>منتظر پاسخ پزشک کلینیک</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="md:w-72 flex flex-col justify-between gap-3 border-t md:border-t-0 md:border-r border-slate-100 pt-3 md:pt-0 md:pr-4">
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] text-slate-400 font-black block">
+                                      {isReplied ? "ویرایش و اصلاح پاسخ:" : "ثبت پاسخ مستقیم پزشک:"}
+                                    </label>
+                                    <textarea
+                                      placeholder="پاسخ علمی خود را در این بخش بنویسید..."
+                                      value={replyTexts[replyKey] !== undefined ? replyTexts[replyKey] : (comment.reply || "")}
+                                      onChange={(e) => setReplyTexts({ ...replyTexts, [replyKey]: e.target.value })}
+                                      className="w-full px-3 py-2 text-xs font-bold text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-slate-50 focus:bg-white transition-all resize-none"
+                                      rows={3}
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50 mt-1">
+                                    <button
+                                      onClick={() => handleDeleteComment(art.id, idx)}
+                                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors text-[10px] font-black cursor-pointer flex items-center gap-1"
+                                      title="حذف کلی این دیدگاه"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>حذف دیدگاه</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleSaveReply(art.id, idx)}
+                                      className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <Reply className="w-3.5 h-3.5" />
+                                      <span>{isReplied ? "بروزرسانی پاسخ" : "ثبت پاسخ پزشک"}</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
