@@ -763,8 +763,20 @@ export default function App() {
               <div className="flex items-center gap-2.5" id="logo-block">
                 <a href="#home" className="flex items-center gap-2 group" id="logo-link">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 group-hover:scale-105 transition-transform" id="logo-icon-wrapper">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path 
+                        d="M12 3C9.5 3 8 4.2 8 6.5C8 9.5 9.5 11.5 9.5 15C9.5 17.5 7.8 19 8.5 19.5C9.2 20 10.5 18 12 16.5C13.5 18 14.8 20 15.5 19.5C16.2 19 14.5 17.5 14.5 15C14.5 11.5 16 9.5 16 6.5C16 4.2 14.5 3 12 3Z" 
+                        fill="currentColor" 
+                      />
+                      <path 
+                        d="M4 12.5C8 9.5 16 9.5 20 12.5C16 15 8 15 4 12.5Z" 
+                        fill="#38bdf8" 
+                        opacity="0.9" 
+                      />
+                      <path 
+                        d="M17.5 3L18.2 4.3L19.5 5L18.2 5.7L17.5 7L16.8 5.7L15.5 5L16.8 4.3L17.5 3Z" 
+                        fill="#fbbf24" 
+                      />
                     </svg>
                   </div>
                   <div className="flex flex-col text-right" id="logo-text">
@@ -1138,8 +1150,20 @@ export default function App() {
               <div className="lg:col-span-5 space-y-4" id="footer-logo-col">
                 <div className="flex items-center gap-2.5" id="footer-logo">
                   <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white" id="footer-logo-icon">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path 
+                        d="M12 3C9.5 3 8 4.2 8 6.5C8 9.5 9.5 11.5 9.5 15C9.5 17.5 7.8 19 8.5 19.5C9.2 20 10.5 18 12 16.5C13.5 18 14.8 20 15.5 19.5C16.2 19 14.5 17.5 14.5 15C14.5 11.5 16 9.5 16 6.5C16 4.2 14.5 3 12 3Z" 
+                        fill="currentColor" 
+                      />
+                      <path 
+                        d="M4 12.5C8 9.5 16 9.5 20 12.5C16 15 8 15 4 12.5Z" 
+                        fill="#38bdf8" 
+                        opacity="0.9" 
+                      />
+                      <path 
+                        d="M17.5 3L18.2 4.3L19.5 5L18.2 5.7L17.5 7L16.8 5.7L15.5 5L16.8 4.3L17.5 3Z" 
+                        fill="#fbbf24" 
+                      />
                     </svg>
                   </div>
                   <div className="flex flex-col text-right" id="footer-logo-text">
