@@ -4,7 +4,7 @@ import { CheckCircle, Search, User, Phone, Lock, Check, AlertCircle, MapPin, Clo
 import { Service } from "../data";
 import { AnimatePresence, motion } from "motion/react";
 import JalaliDatePicker from "./JalaliDatePicker";
-import { toPersianDigits } from "../lib/jalali";
+import { toPersianDigits, formatDateToJalaliString } from "../lib/jalali";
 
 interface BookingSectionProps {
   selectedServiceId: string;
@@ -22,9 +22,27 @@ interface BookingSectionProps {
     shiftMorningName?: string;
     shiftAfternoonName?: string;
   };
+  onBookingCreated?: () => void;
 }
 
-export default function BookingSection({ selectedServiceId, services, clinicConfig }: BookingSectionProps) {
+const getTomorrowJalaliStr = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return formatDateToJalaliString(tomorrow);
+};
+
+const normalizePhone = (p: string) => {
+  if (!p) return "";
+  let digits = p
+    .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
+    .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
+    .replace(/[\s\-\(\)\+]/g, "");
+  if (digits.startsWith("0098")) digits = "0" + digits.slice(4);
+  else if (digits.startsWith("98")) digits = "0" + digits.slice(2);
+  return digits;
+};
+
+export default function BookingSection({ selectedServiceId, services, clinicConfig, onBookingCreated }: BookingSectionProps) {
   const [bookingTab, setBookingTab] = useState<"new" | "track">("new");
   
   // New Appointment States
@@ -33,7 +51,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
     phone: "",
     email: "",
     serviceId: "implant",
-    date: "",
+    date: getTomorrowJalaliStr(),
     timeSlot: "morning",
     notes: ""
   });
@@ -78,10 +96,11 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
       errors.fullName = "نام باید حداقل شامل ۳ حرف باشد.";
     }
 
+    const cleanPhone = normalizePhone(formData.phone);
     const phoneRegex = /^09[0-9]{9}$/;
-    if (!formData.phone) {
+    if (!formData.phone.trim()) {
       errors.phone = "وارد کردن شماره تماس جهت هماهنگی الزامی است.";
-    } else if (!phoneRegex.test(formData.phone)) {
+    } else if (!phoneRegex.test(cleanPhone)) {
       errors.phone = "شماره موبایل وارد شده معتبر نیست. نمونه معتبر: 09123456789";
     }
 
@@ -99,52 +118,121 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+    let finalRef = "";
+    const cleanPhone = normalizePhone(formData.phone);
+    const payload = {
+      ...formData,
+      phone: cleanPhone
+    };
+
     try {
       const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (response.ok) {
-        setBookingRef(data.id || data.refCode || `DF-${Math.floor(100000 + Math.random() * 900000)}`);
+        finalRef = data.id || data.refCode || `DF-${Math.floor(100000 + Math.random() * 900000)}`;
+        setBookingRef(finalRef);
         setIsSubmitted(true);
       } else {
         toast.error(data.error || "ثبت نوبت با خطا مواجه شد.");
+        setIsSubmitting(false);
+        return;
       }
     } catch (err) {
       console.error("Booking Error:", err);
-      // Fallback
-      setBookingRef(`DF-${Math.floor(100000 + Math.random() * 900000)}`);
+      // Fallback local save
+      finalRef = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
+      setBookingRef(finalRef);
       setIsSubmitted(true);
     } finally {
       setIsSubmitting(false);
+    }
+
+    // Always ensure local storage persistence for offline/client fallback
+    if (finalRef) {
+      try {
+        const newBooking = {
+          id: finalRef,
+          fullName: formData.fullName.trim(),
+          phone: cleanPhone,
+          email: formData.email ? formData.email.trim() : "",
+          serviceId: formData.serviceId,
+          date: formData.date,
+          timeSlot: formData.timeSlot,
+          notes: formData.notes ? formData.notes.trim() : "",
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          adminComment: ""
+        };
+        const existingStr = localStorage.getItem("df_bookings");
+        let existing = [];
+        if (existingStr) {
+          try { existing = JSON.parse(existingStr); } catch { existing = []; }
+        }
+        if (!Array.isArray(existing)) existing = [];
+        const updated = [newBooking, ...existing.filter((b: any) => String(b.id).toLowerCase() !== finalRef.toLowerCase())];
+        localStorage.setItem("df_bookings", JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Could not save to localStorage:", e);
+      }
+    }
+
+    if (onBookingCreated) {
+      onBookingCreated();
     }
   };
 
   // Track Booking
   const handleBookingTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!trackCode.trim()) return;
+    const rawCode = trackCode.trim();
+    if (!rawCode) return;
+
+    // Convert Persian digits in code if any
+    const code = rawCode
+      .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
+      .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)]);
 
     setIsTrackingLoading(true);
     setTrackError("");
     setTrackedBooking(null);
 
     try {
-      const res = await fetch(`/api/bookings/track/${encodeURIComponent(trackCode.trim())}`);
-      const data = await res.json();
+      const res = await fetch(`/api/bookings/track/${encodeURIComponent(code)}`);
       if (res.ok) {
+        const data = await res.json();
         setTrackedBooking(data);
-      } else {
-        setTrackError(data.error || "نوبتی با این کد رهگیری یافت نشد. لطفاً دقت فرمایید.");
+        setIsTrackingLoading(false);
+        return;
       }
     } catch (err) {
       console.error("Error tracking booking:", err);
-      setTrackError("اتصال به سرور برقرار نشد. لطفاً مجدداً تلاش فرمایید.");
-    } finally {
-      setIsTrackingLoading(false);
     }
+
+    // Fallback to local storage
+    try {
+      const existingStr = localStorage.getItem("df_bookings");
+      let existing = [];
+      if (existingStr) {
+        try { existing = JSON.parse(existingStr); } catch { existing = []; }
+      }
+      if (Array.isArray(existing)) {
+        const found = existing.find((b: any) => String(b.id).toLowerCase() === code.toLowerCase());
+        if (found) {
+          setTrackedBooking(found);
+          setIsTrackingLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Local tracking search error:", e);
+    }
+
+    setTrackError("نوبتی با این کد رهگیری یافت نشد. لطفاً در وارد کردن کد دقت فرمایید.");
+    setIsTrackingLoading(false);
   };
 
   const getServiceTitle = (serviceId: string) => {
@@ -430,18 +518,37 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                           setTrackedBooking(null);
                           try {
                             const res = await fetch(`/api/bookings/track/${encodeURIComponent(bookingRef)}`);
-                            const data = await res.json();
                             if (res.ok) {
+                              const data = await res.json();
                               setTrackedBooking(data);
-                            } else {
-                              setTrackError(data.error || "نوبتی با این کد رهگیری یافت نشد.");
+                              setIsTrackingLoading(false);
+                              return;
                             }
                           } catch (err) {
                             console.error("Error tracking booking:", err);
-                            setTrackError("خطایی رخ داد.");
-                          } finally {
-                            setIsTrackingLoading(false);
                           }
+
+                          // Fallback to local storage
+                          try {
+                            const existingStr = localStorage.getItem("df_bookings");
+                            let existing = [];
+                            if (existingStr) {
+                              try { existing = JSON.parse(existingStr); } catch { existing = []; }
+                            }
+                            if (Array.isArray(existing)) {
+                              const found = existing.find((b: any) => String(b.id).toLowerCase() === bookingRef.toLowerCase());
+                              if (found) {
+                                setTrackedBooking(found);
+                                setIsTrackingLoading(false);
+                                return;
+                              }
+                            }
+                          } catch (e) {
+                            console.warn("Local tracking search error:", e);
+                          }
+
+                          setTrackError("نوبتی با این کد رهگیری یافت نشد.");
+                          setIsTrackingLoading(false);
                         }}
                         className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-teal-600 text-white hover:bg-teal-700 font-extrabold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-teal-600/10"
                       >

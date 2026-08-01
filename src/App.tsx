@@ -1121,6 +1121,7 @@ export default function App() {
                   selectedServiceId={selectedServiceId} 
                   services={services}
                   clinicConfig={clinicConfig}
+                  onBookingCreated={fetchAdminBookings}
                 />
               </motion.div>
             )}
