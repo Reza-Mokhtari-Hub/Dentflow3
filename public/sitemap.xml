@@ -1,28 +1,156 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  
-  <!-- صفحه اصلی -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://dentflow.ir/</loc>
-    <lastmod>2026-07-10</lastmod>
+    <lastmod>2026-08-20</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
-
-  <!-- صفحه لیست دوره‌ها یا مقالات (مثال) -->
   <url>
-    <loc>https://www.dentflow.ir/#articles</loc>
-    <lastmod>2026-07-10</lastmod>
+    <loc>https://dentflow.ir/services</loc>
+    <lastmod>2026-08-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
-
-  <!-- صفحه تماس با ما (مثال) -->
   <url>
-    <loc>https://www.dentflow.ir/#contact</loc>
-    <lastmod>2026-07-01</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.5</priority>
+    <loc>https://dentflow.ir/booking</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
   </url>
-
+  <url>
+    <loc>https://dentflow.ir/articles</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/gallery</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/assistant</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/about</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/contact</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/services/implant</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/services/laminate</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/services/orthodontics</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/services/root-canal</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/services/bleaching</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/services/pediatric</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/articles/7</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://dentflow.ir/images/blog-implant.svg</image:loc>
+      <image:title>پیشرفت‌های نوین در تکنیک‌های کاشت ایمپلنت دندانی: راهکارهای نوین برای لبخندی پایدار و طبیعی</image:title>
+      <image:caption>ایمپلنت‌های دندانی به عنوان راه‌حلی نوین و دائمی برای جایگزینی دندان‌های از دست رفته، انقلابی در دندانپزشکی ایجاد کرده‌اند.</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/articles/6</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://lunapediatricdentistry.com/wp-content/uploads/2023/10/healthy-food-768x538.jpg</image:loc>
+      <image:title>تغذیه دهانی: پازل پنهان سلامت دندان‌ها و لثه‌ها</image:title>
+      <image:caption>آیا می‌دانستید لبخند زیبا و دندان‌های سالم شما ارتباط تنگاتنگی با آنچه می‌خورید دارد؟</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/articles/5</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://www.advanceddental.co/_airtable/bdb5048e4456115a.webp</image:loc>
+      <image:title>مهندسی بهداشت دهان: رمزگشایی از بیومکانیک مسواک زدن و نخ دندان کشیدن اصولی برای لبخندی پایدار</image:title>
+      <image:caption>آیا تا به حال به جنبه‌های علمی و بیومکانیکی مسواک زدن و نخ دندان کشیدن فکر کرده‌اید؟</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/articles/4</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://www.specialistkidsdentist.com.au/wordpress/wp-content/uploads/Shutterstock_2152488417.jpg</image:loc>
+      <image:title>ریشه‌های لبخند پایدار: تبیین بیولوژیک نقش مراقبت‌های دهان کودکی در سلامت بزرگسالی</image:title>
+      <image:caption>آیا تا به حال به این فکر کرده‌اید که سلامت دندان‌های شیری کودک شما چگونه می‌تواند بر سلامت عمومی و لبخند او در تمام طول زندگی تأثیر بگذارد؟</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/articles/1</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://dentflow.ir/images/blog-implant.svg</image:loc>
+      <image:title>مراقبت‌های حیاتی پس از کاشت ایمپلنت دندان که باید بدانید</image:title>
+      <image:caption>کاشت ایمپلنت یک جراحی ظریف است. رعایت این ۵ نکته طلایی در هفته اول می‌تواند شانس موفقیت جوش خوردن پایه را تا ۹۹٪ تضمین کند.</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://dentflow.ir/articles/2</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://dentflow.ir/images/blog-laminate.svg</image:loc>
+      <image:title>تفاوت لمینت سرامیکی و کامپوزیت ونیر چیست؟ کدام مناسب شماست؟</image:title>
+      <image:caption>بررسی کامل مقایسه قیمت، میزان تراش دندان، ثبات رنگ، طول عمر و تفاوت زیبایی لمینت‌های شیشه‌ای و کامپوزیت‌های سوئیسی.</image:caption>
+    </image:image>
+  </url>
 </urlset>

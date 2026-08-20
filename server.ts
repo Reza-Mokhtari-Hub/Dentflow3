@@ -972,14 +972,13 @@ function generateSitemapXml(customBaseUrl?: string): string {
 
   const coreRoutes = [
     { loc: `${baseUrl}/`, changefreq: "daily", priority: "1.0", lastmod: today },
-    { loc: `${baseUrl}/#services`, changefreq: "weekly", priority: "0.9", lastmod: today },
-    { loc: `${baseUrl}/#booking`, changefreq: "daily", priority: "0.95", lastmod: today },
-    { loc: `${baseUrl}/#articles`, changefreq: "daily", priority: "0.9", lastmod: today },
-    { loc: `${baseUrl}/#gallery`, changefreq: "weekly", priority: "0.85", lastmod: today },
-    { loc: `${baseUrl}/#assistant`, changefreq: "weekly", priority: "0.8", lastmod: today },
-    { loc: `${baseUrl}/#about`, changefreq: "monthly", priority: "0.75", lastmod: today },
-    { loc: `${baseUrl}/#contact`, changefreq: "monthly", priority: "0.75", lastmod: today },
-    { loc: `${baseUrl}/#portal`, changefreq: "monthly", priority: "0.6", lastmod: today }
+    { loc: `${baseUrl}/services`, changefreq: "weekly", priority: "0.9", lastmod: today },
+    { loc: `${baseUrl}/booking`, changefreq: "daily", priority: "0.95", lastmod: today },
+    { loc: `${baseUrl}/articles`, changefreq: "daily", priority: "0.9", lastmod: today },
+    { loc: `${baseUrl}/gallery`, changefreq: "weekly", priority: "0.85", lastmod: today },
+    { loc: `${baseUrl}/assistant`, changefreq: "weekly", priority: "0.8", lastmod: today },
+    { loc: `${baseUrl}/about`, changefreq: "monthly", priority: "0.75", lastmod: today },
+    { loc: `${baseUrl}/contact`, changefreq: "monthly", priority: "0.75", lastmod: today }
   ];
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -989,7 +988,7 @@ function generateSitemapXml(customBaseUrl?: string): string {
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
 `;
 
-  // Core Sections
+  // Core Sections (Standard clean URLs for Googlebot)
   for (const route of coreRoutes) {
     xml += `  <url>
     <loc>${escapeXml(route.loc)}</loc>
@@ -1000,17 +999,10 @@ function generateSitemapXml(customBaseUrl?: string): string {
 `;
   }
 
-  // Clinic Services
+  // Clinic Services (Clean URLs)
   if (Array.isArray(services)) {
     for (const service of services) {
       if (!service || !service.id) continue;
-      xml += `  <url>
-    <loc>${escapeXml(`${baseUrl}/#service-${service.id}`)}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>
-`;
       xml += `  <url>
     <loc>${escapeXml(`${baseUrl}/services/${service.id}`)}</loc>
     <lastmod>${today}</lastmod>
@@ -1021,11 +1013,10 @@ function generateSitemapXml(customBaseUrl?: string): string {
     }
   }
 
-  // All Dynamic Articles & Blog Posts (Automatically updated when articles are added or modified)
+  // All Dynamic Articles & Blog Posts (Clean URLs with Google Image Sitemap tags)
   if (Array.isArray(blogPosts)) {
     for (const post of blogPosts) {
       if (!post || !post.id) continue;
-      const postHashUrl = `${baseUrl}/#article/${post.id}`;
       const postPathUrl = `${baseUrl}/articles/${post.id}`;
 
       let postImageLoc = "";
@@ -1038,7 +1029,7 @@ function generateSitemapXml(customBaseUrl?: string): string {
       }
 
       xml += `  <url>
-    <loc>${escapeXml(postHashUrl)}</loc>
+    <loc>${escapeXml(postPathUrl)}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
@@ -1048,14 +1039,6 @@ ${postImageLoc ? `    <image:image>
       <image:caption>${escapeXml(post.excerpt || post.title || "")}</image:caption>
     </image:image>
 ` : ""}  </url>
-`;
-
-      xml += `  <url>
-    <loc>${escapeXml(postPathUrl)}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.85</priority>
-  </url>
 `;
     }
   }
@@ -1497,6 +1480,32 @@ Sitemap: ${baseUrl}/sitemap.xml
 
     const token = createAdminSession(adminCredentials.username);
     return res.json({ ok: true, token, username: adminCredentials.username });
+  });
+
+  // API Route: Update admin credentials
+  app.post("/api/admin/update-password", authenticateAdmin, async (req, res) => {
+    try {
+      const { currentUsername, currentPassword, newUsername, newPassword } = req.body || {};
+      if (!currentUsername || !currentPassword || !newUsername || !newPassword) {
+        return res.status(400).json({ error: "تمامی فیلدها الزامی هستند." });
+      }
+
+      const isValid = currentUsername.trim().toLowerCase() === adminCredentials.username.trim().toLowerCase() &&
+                      hashPassword(currentPassword) === adminCredentials.passwordHash;
+
+      if (!isValid) {
+        return res.status(401).json({ error: "نام کاربری یا کلمه عبور فعلی نادرست است." });
+      }
+
+      adminCredentials.username = newUsername.trim();
+      adminCredentials.passwordHash = hashPassword(newPassword);
+
+      await persistState();
+      res.json({ ok: true, success: true, message: "اطلاعات با موفقیت به‌روزرسانی شد." });
+    } catch (error: any) {
+      console.error("Update password error:", error);
+      res.status(500).json({ error: "خطا در به‌روزرسانی کلمه عبور." });
+    }
   });
 
   // API Route: Delete booking

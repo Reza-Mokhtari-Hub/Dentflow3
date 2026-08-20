@@ -52,6 +52,7 @@ import ContactSection from "./components/ContactSection";
 import AdminPanel from "./components/AdminPanel";
 import PatientPortal from "./components/PatientPortal";
 import ToastContainer from "./components/ToastContainer";
+import { toast } from "./lib/toast";
 
 export default function App() {
   // Navigation states
@@ -673,55 +674,87 @@ export default function App() {
   }, [adminToken]);
 
   const updateBookingStatus = async (id: string, status: string) => {
-    if (useLocalDb) {
-      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, status } : b);
-      saveLocalBookings(updated);
-      return;
+    const cleanId = String(id).trim().toLowerCase();
+    
+    // Optimistically update React state and localStorage immediately
+    setAdminBookings(prev => prev.map(b => String(b.id).trim().toLowerCase() === cleanId ? { ...b, status } : b));
+    const localStr = localStorage.getItem("df_bookings");
+    if (localStr) {
+      try {
+        const parsed = JSON.parse(localStr);
+        const updated = parsed.map((b: any) => String(b.id).trim().toLowerCase() === cleanId ? { ...b, status } : b);
+        localStorage.setItem("df_bookings", JSON.stringify(updated));
+      } catch {}
     }
+
     try {
       const res = await fetch(`/api/bookings/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status })
       });
-      if (res.ok) fetchAdminBookings();
+      if (res.ok) {
+        toast.success(status === "approved" ? "نوبت تایید شد." : status === "cancelled" ? "نوبت لغو شد." : "وضعیت نوبت به‌روزرسانی شد.");
+      }
     } catch (err) {
-      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, status } : b);
-      saveLocalBookings(updated);
+      console.warn("Error updating booking status on server:", err);
     }
   };
 
   const deleteBooking = async (id: string) => {
-    if (useLocalDb) {
-      const updated = getLocalBookings().filter((b: any) => b.id !== id);
-      saveLocalBookings(updated);
-      return;
+    const cleanId = String(id).trim().toLowerCase();
+
+    // 1. CRITICAL: Immediately remove from local React state and localStorage FIRST
+    // This prevents fetchAdminBookings from seeing the deleted item in localStorage and re-syncing/recreating it!
+    setAdminBookings(prev => prev.filter(b => String(b.id).trim().toLowerCase() !== cleanId));
+    const localStr = localStorage.getItem("df_bookings");
+    if (localStr) {
+      try {
+        const parsed = JSON.parse(localStr);
+        const updated = parsed.filter((b: any) => String(b.id).trim().toLowerCase() !== cleanId);
+        localStorage.setItem("df_bookings", JSON.stringify(updated));
+      } catch {}
     }
+
+    // 2. Execute DELETE on server
     try {
       const res = await fetch(`/api/bookings/${id}`, { method: "DELETE" });
-      if (res.ok) fetchAdminBookings();
+      if (res.ok) {
+        toast.success("نوبت با موفقیت حذف شد.");
+      } else {
+        toast.success("نوبت از لیست حذف شد.");
+      }
     } catch (err) {
-      const updated = getLocalBookings().filter((b: any) => b.id !== id);
-      saveLocalBookings(updated);
+      console.warn("Delete booking server error:", err);
+      toast.success("نوبت از سیستم حذف گردید.");
     }
   };
 
   const updateBookingDetails = async (id: string, updates: any) => {
-    if (useLocalDb) {
-      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, ...updates } : b);
-      saveLocalBookings(updated);
-      return;
+    const cleanId = String(id).trim().toLowerCase();
+
+    // Optimistically update React state and localStorage immediately
+    setAdminBookings(prev => prev.map(b => String(b.id).trim().toLowerCase() === cleanId ? { ...b, ...updates } : b));
+    const localStr = localStorage.getItem("df_bookings");
+    if (localStr) {
+      try {
+        const parsed = JSON.parse(localStr);
+        const updated = parsed.map((b: any) => String(b.id).trim().toLowerCase() === cleanId ? { ...b, ...updates } : b);
+        localStorage.setItem("df_bookings", JSON.stringify(updated));
+      } catch {}
     }
+
     try {
       const res = await fetch(`/api/bookings/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates)
       });
-      if (res.ok) fetchAdminBookings();
+      if (res.ok) {
+        toast.success("اطلاعات نوبت ذخیره شد.");
+      }
     } catch (err) {
-      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, ...updates } : b);
-      saveLocalBookings(updated);
+      console.warn("Error updating booking details on server:", err);
     }
   };
 

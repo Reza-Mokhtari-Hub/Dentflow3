@@ -320,6 +320,7 @@ export default function BookingsTab({
                         )}
 
                         <button
+                          type="button"
                           id={`btn-delete-${b.id}`}
                           onClick={() => deleteBooking(b.id)}
                           className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
