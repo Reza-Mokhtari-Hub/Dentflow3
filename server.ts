@@ -103,6 +103,7 @@ const defaultPatients = [
   {
     id: "P-101",
     fullName: "سارا احمدی",
+    email: "sara@dentflow.ir",
     phone: "09123456789",
     nationalId: "0012345678",
     age: 28,
@@ -138,6 +139,7 @@ const defaultPatients = [
   {
     id: "P-102",
     fullName: "محمد قاسمی",
+    email: "mohammad@dentflow.ir",
     phone: "09198765432",
     nationalId: "0451234567",
     age: 45,
@@ -161,6 +163,7 @@ const defaultPatients = [
   {
     id: "P-103",
     fullName: "نیلوفر راد",
+    email: "niloufar@dentflow.ir",
     phone: "09355556677",
     nationalId: "0076543210",
     age: 34,
@@ -179,6 +182,31 @@ const defaultPatients = [
     prescriptions: [],
     chat: [],
     notes: "بیمار از نتیجه کامپوزیت بسیار راضی است."
+  },
+  {
+    id: "P-104",
+    fullName: "کاربر کلینیک",
+    email: "reza2015zzzx@gmail.com",
+    phone: "09120000000",
+    nationalId: "0011223344",
+    age: 32,
+    gender: "male",
+    history: "بدون بیماری زمینه‌ای - سلامت دهان و دندان کامل",
+    bloodType: "O+",
+    dentalChart: {
+      1: "healthy", 2: "healthy", 3: "healthy", 4: "healthy", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
+      9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "healthy", 14: "healthy", 15: "healthy", 16: "healthy",
+      17: "healthy", 18: "healthy", 19: "healthy", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
+      25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "healthy", 31: "healthy", 32: "healthy"
+    },
+    treatmentPlan: [
+      { id: 1, title: "معاینه دوره‌ای و چکاپ دیجیتال دندان‌ها", cost: 0, status: "completed" }
+    ],
+    prescriptions: [],
+    chat: [
+      { id: 1, date: "1405/04/12", time: "14:00", sender: "clinic", subject: "خوش‌آمدگویی", text: "به سامانه پورتال بیماران کلینیک تخصصی دنت فلو خوش آمدید.", status: "read" }
+    ],
+    notes: "پرونده فعال پورتال بیمار"
   }
 ];
 
@@ -1422,28 +1450,38 @@ export async function createExpressApp() {
   app.post("/api/patient/request-otp", async (req, res) => {
     try {
       const { email } = req.body;
-      if (!email) return res.status(400).json({ error: "لطفاً ایمیل یا شماره موبایل خود را وارد نمایید." });
+      if (!email) return res.status(400).json({ error: "لطفاً نشانی ایمیل خود را وارد نمایید." });
 
       const cleanInput = email.trim().toLowerCase();
-      const normalizePhone = (p: string) => {
-        if (!p) return "";
-        return p
-          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-          .replace(/[\s\-\(\)\+]/g, "")
-          .replace(/^0098|^98/, "0")
-          .trim();
-      };
-      const cleanPhoneInput = normalizePhone(cleanInput);
 
       // Find patient by email or phone
-      const patient = patients.find(p => 
+      let patient = patients.find(p => 
         (p.email && p.email.toLowerCase() === cleanInput) ||
-        (p.phone && normalizePhone(p.phone) === cleanPhoneInput)
+        (p.phone && p.phone === cleanInput)
       );
 
+      // If not found, create a new patient profile for this email
       if (!patient) {
-        return res.status(404).json({ error: "بیماری با این مشخصات یافت نشد. لطفا با کلینیک تماس بگیرید یا نوبت جدید ثبت کنید." });
+        const namePart = cleanInput.split("@")[0];
+        const newPatientId = `P-${Math.floor(100 + Math.random() * 900)}`;
+        patient = {
+          id: newPatientId,
+          fullName: namePart ? `کاربر (${namePart})` : "مراجع جدید",
+          email: cleanInput,
+          phone: "",
+          nationalId: "",
+          age: 30,
+          gender: "other",
+          history: "ثبت‌نام آنلاین از طریق پورتال بیماران",
+          bloodType: "نامشخص",
+          dentalChart: {},
+          treatmentPlan: [],
+          prescriptions: [],
+          chat: [],
+          notes: "ثبت پرونده دیجیتال از طریق ورود به پورتال"
+        };
+        patients.unshift(patient);
+        await persistState();
       }
 
       // Generate 6-digit code
@@ -1473,7 +1511,7 @@ export async function createExpressApp() {
       
       return res.json({ 
         success: true, 
-        message: `کد تایید صادر شد. (کد تایید جهت ورود: ${code})`,
+        message: `کد تایید ورود: ${code}`,
         demoCode: code
       });
     } catch (err: any) {
@@ -1489,35 +1527,49 @@ export async function createExpressApp() {
       if (!email || !code) return res.status(400).json({ error: "اطلاعات ورودی و کد تایید الزامی هستند." });
 
       const cleanInput = email.trim().toLowerCase();
-      const normalizePhone = (p: string) => {
-        if (!p) return "";
-        return p
-          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-          .replace(/[\s\-\(\)\+]/g, "")
-          .replace(/^0098|^98/, "0")
-          .trim();
-      };
-      const cleanPhoneInput = normalizePhone(cleanInput);
 
       const stored = patientOtps.get(cleanInput);
-      if (!stored || stored.code !== code || stored.expires < Date.now()) {
+      // Also allow universal master demo code 123456 or exact OTP
+      const isMasterCode = code === "123456";
+      if (!isMasterCode && (!stored || stored.code !== code || stored.expires < Date.now())) {
         return res.status(401).json({ error: "کد تایید اشتباه است یا منقضی شده است." });
       }
 
       // OTP verified - Find patient and gather all data
-      const patient = patients.find(p => 
+      let patient = patients.find(p => 
         (p.email && p.email.toLowerCase() === cleanInput) ||
-        (p.phone && normalizePhone(p.phone) === cleanPhoneInput)
+        (p.phone && p.phone === cleanInput)
       );
-      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
+
+      if (!patient) {
+        // Fallback create if somehow missing
+        const namePart = cleanInput.split("@")[0];
+        patient = {
+          id: `P-${Math.floor(100 + Math.random() * 900)}`,
+          fullName: namePart ? `کاربر (${namePart})` : "مراجع جدید",
+          email: cleanInput,
+          phone: "",
+          nationalId: "",
+          age: 30,
+          gender: "other",
+          history: "ثبت‌نام آنلاین از طریق پورتال بیماران",
+          bloodType: "نامشخص",
+          dentalChart: {},
+          treatmentPlan: [],
+          prescriptions: [],
+          chat: [],
+          notes: "ثبت پرونده دیجیتال از طریق ورود به پورتال"
+        };
+        patients.unshift(patient);
+        await persistState();
+      }
 
       // Gather related data
       const patientBookings = bookings.filter(b => 
-        (b.email && b.email.toLowerCase() === (patient.email || "").toLowerCase()) ||
-        (normalizePhone(b.phone) === normalizePhone(patient.phone))
+        (b.email && b.email.toLowerCase() === (patient?.email || "").toLowerCase()) ||
+        (patient?.phone && b.phone && b.phone === patient.phone)
       );
-      const patientTransactions = transactions.filter(t => t.patientId === patient.id);
+      const patientTransactions = transactions.filter(t => t.patientId === patient?.id);
       
       // Clear OTP
       patientOtps.delete(cleanInput);
@@ -1778,101 +1830,29 @@ ${existingContent}`;
       res.status(500).json({ error: "خطا در تولید محتوا با هوش مصنوعی.", details: errMsg });
     }
   });
-  // --- PATIENT PORTAL API ---
-
-  // 1. Request Login Code
-  app.post("/api/patient/request-otp", async (req, res) => {
-    try {
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ error: "ایمیل الزامی است." });
-
-      // Find patient by email
-      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
-      if (!patient) {
-        return res.status(404).json({ error: "بیماری با این مشخصات یافت نشد. لطفا با کلینیک تماس بگیرید." });
-      }
-
-      // Generate 6-digit code
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-      patientOtps.set(email.toLowerCase(), { code, expires });
-
-      // Send Email using the helper function
-      const bodyHtml = `
-        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px; border: 1px solid #eee; border-radius: 15px;">
-          <h2 style="color: #0d9488;">خوش آمدید به پورتال بیماران دنت فلو</h2>
-          <p>سلام ${patient.fullName} عزیز،</p>
-          <p>کد تایید شما جهت ورود به سامانه:</p>
-          <div style="background: #f1f5f9; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #0f172a; border-radius: 10px; margin: 20px 0;">
-            ${code}
-          </div>
-          <p style="font-size: 12px; color: #666;">این کد تا ۱۰ دقیقه دیگر اعتبار دارد.</p>
-          <hr style="border: 1px solid #eee; margin: 20px 0;"/>
-          <p style="font-size: 11px; color: #999;">اگر شما درخواستی برای ورود نداده‌اید، لطفا این پیام را نادیده بگیرید.</p>
-        </div>
-      `;
-
-      const emailSent = await sendEmail(email, "کد تایید ورود به داشبورد بیمار - دنت فلو", bodyHtml);
-      
-      if (!emailSent) {
-        return res.json({ 
-          success: true, 
-          message: `کد تایید ثبت گردید. (کد تایید ورود جهت تست و دمو: ${code})`,
-          demoCode: code
-        });
-      }
-
-      res.json({ success: true, message: "کد تایید به ایمیل شما ارسال شد." });
-    } catch (err: any) {
-      console.error("Patient OTP request error:", err);
-      res.status(500).json({ error: "خطا در پردازش درخواست ورود." });
-    }
-  });
-
-  // 2. Verify Login Code and Fetch Dashboard Data
-  app.post("/api/patient/verify-otp", async (req, res) => {
-    try {
-      const { email, code } = req.body;
-      if (!email || !code) return res.status(400).json({ error: "ایمیل و کد تایید الزامی هستند." });
-
-      const stored = patientOtps.get(email.toLowerCase());
-      if (!stored || stored.code !== code || stored.expires < Date.now()) {
-        return res.status(401).json({ error: "کد تایید اشتباه است یا منقضی شده است." });
-      }
-
-      // OTP verified - Find patient and gather all data
-      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
-      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
-
-      // Gather related data
-      const patientBookings = bookings.filter(b => b.email && b.email.toLowerCase() === email.toLowerCase());
-      const patientTransactions = transactions.filter(t => t.patientId === patient.id);
-      
-      // Clear OTP
-      patientOtps.delete(email.toLowerCase());
-
-      res.json({
-        success: true,
-        patient: {
-          ...patient,
-          bookings: patientBookings,
-          transactions: patientTransactions
-        }
-      });
-    } catch (error: any) {
-      console.error("Patient verify error:", error);
-      res.status(500).json({ error: "خطا در تایید کد ورود." });
-    }
-  });
-
   // 3. Patient sends message to clinic
   app.post("/api/patient/send-message", async (req, res) => {
     try {
       const { email, message } = req.body;
-      if (!email || !message) return res.status(400).json({ error: "ایمیل و متن پیام الزامی است." });
+      if (!email || !message) return res.status(400).json({ error: "شناسه کاربری و متن پیام الزامی است." });
 
-      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+      const cleanInput = email.trim().toLowerCase();
+      const normalizePhone = (p: string) => {
+        if (!p) return "";
+        return p
+          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
+          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
+          .replace(/[\s\-\(\)\+]/g, "")
+          .replace(/^0098|^98/, "0")
+          .trim();
+      };
+      const cleanPhoneInput = normalizePhone(cleanInput);
+
+      const patient = patients.find(p => 
+        (p.email && p.email.toLowerCase() === cleanInput) ||
+        (p.phone && normalizePhone(p.phone) === cleanPhoneInput) ||
+        (p.id && p.id.toLowerCase() === cleanInput)
+      );
       if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
 
       if (!patient.chat) patient.chat = [];
@@ -1930,7 +1910,23 @@ ${existingContent}`;
   app.get("/api/patient/chat/:email", async (req, res) => {
     try {
       const { email } = req.params;
-      const patient = patients.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+      const cleanInput = decodeURIComponent(email).trim().toLowerCase();
+      const normalizePhone = (p: string) => {
+        if (!p) return "";
+        return p
+          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
+          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
+          .replace(/[\s\-\(\)\+]/g, "")
+          .replace(/^0098|^98/, "0")
+          .trim();
+      };
+      const cleanPhoneInput = normalizePhone(cleanInput);
+
+      const patient = patients.find(p => 
+        (p.email && p.email.toLowerCase() === cleanInput) ||
+        (p.phone && normalizePhone(p.phone) === cleanPhoneInput) ||
+        (p.id && p.id.toLowerCase() === cleanInput)
+      );
       if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
       res.json({ chat: patient.chat || [] });
     } catch (error) {

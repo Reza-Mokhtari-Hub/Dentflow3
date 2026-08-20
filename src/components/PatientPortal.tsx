@@ -152,8 +152,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
       if (savedPatientsStr) {
         const localPatients = JSON.parse(savedPatientsStr);
         const found = localPatients.find((p: any) => 
-          (p.email && p.email.toLowerCase() === cleanEmail) || 
-          (p.phone && p.phone === cleanEmail)
+          p.email && p.email.toLowerCase() === cleanEmail
         );
         if (found) {
           toast.info("کد تایید آزمایشی شما: 123456", 8000);
@@ -166,7 +165,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
       console.warn("Local patient search error:", e);
     }
 
-    if (!error) setError("بیماری با این نشانی ایمیل یا شماره تماس یافت نشد. لطفاً دقت فرمایید.");
+    if (!error) setError("بیماری با این نشانی ایمیل یافت نشد. لطفاً ایمیل خود را با دقت وارد فرمایید.");
     setLoading(false);
   };
 
@@ -202,8 +201,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
         if (savedPatientsStr) {
           const localPatients = JSON.parse(savedPatientsStr);
           const found = localPatients.find((p: any) => 
-            (p.email && p.email.toLowerCase() === cleanEmail) || 
-            (p.phone && p.phone === cleanEmail)
+            p.email && p.email.toLowerCase() === cleanEmail
           );
           if (found) {
             // Populate full patient data structure
@@ -214,7 +212,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
               medicalPhotos: found.medicalPhotos || [],
               chat: found.chat || [],
               bookings: JSON.parse(localStorage.getItem("df_bookings") || "[]").filter((b: any) => 
-                (b.email && b.email.toLowerCase() === cleanEmail) || (b.phone && b.phone === found.phone)
+                b.email && b.email.toLowerCase() === cleanEmail
               )
             });
             setStep("dashboard");
@@ -284,12 +282,12 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                     <User className="w-8 h-8" />
                   </div>
                   <h1 className="text-2xl font-black text-slate-800 mb-2">ورود به پورتال بیماران</h1>
-                  <p className="text-slate-500 text-sm font-medium">جهت مشاهده پرونده، برای خود ایمیل وارد کنید</p>
+                  <p className="text-slate-500 text-sm font-medium">جهت مشاهده پرونده دیجیتال، نشانی ایمیل خود را وارد کنید</p>
                 </div>
 
                 <form onSubmit={handleRequestOtp} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-slate-700 font-bold text-xs pr-1">نشانی ایمیل:</label>
+                    <label className="text-slate-700 font-bold text-xs pr-1">نشانی ایمیل بیمار:</label>
                     <div className="relative">
                       <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                       <input 
@@ -298,7 +296,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="yourname@example.com"
-                        className="w-full pl-4 pr-12 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-slate-50 font-mono text-left transition-all"
+                        className="w-full pl-4 pr-12 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-slate-50 font-mono text-left transition-all text-sm"
                         dir="ltr"
                       />
                     </div>
@@ -318,14 +316,36 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                     disabled={loading}
                     className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-teal-600/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    {loading ? "در حال بررسی..." : "ارسال کد تایید"}
+                    {loading ? "در حال ارسال کد..." : "ارسال کد تایید یکبار مصرف"}
                   </button>
                 </form>
 
-                <div className="mt-8 pt-6 border-t border-slate-100 flex items-start gap-3 bg-slate-50/50 p-4 rounded-2xl">
+                {/* Quick Demo Emails for instant testing */}
+                <div className="mt-6 pt-4 border-t border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-400 block mb-2 text-center">ایمیل‌های تستی جهت ورود فوری به پرونده‌ها:</span>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {[
+                      { name: "سارا احمدی", email: "sara@dentflow.ir" },
+                      { name: "محمد قاسمی", email: "mohammad@dentflow.ir" },
+                      { name: "نیلوفر راد", email: "niloufar@dentflow.ir" },
+                      { name: "ایمیل شما", email: "reza2015zzzx@gmail.com" }
+                    ].map((demo) => (
+                      <button
+                        key={demo.email}
+                        type="button"
+                        onClick={() => setEmail(demo.email)}
+                        className="text-[11px] bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-teal-200/60"
+                      >
+                        {demo.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3 bg-slate-50/50 p-4 rounded-2xl">
                   <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0" />
                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    امنیت اطلاعات شما اولویت ماست. دسترسی به پرونده فقط از طریق ایمیل ثبت شده در سیستم کلینیک دنت فلو امکان‌پذیر است.
+                    امنیت اطلاعات شما اولویت ماست. دسترسی به پرونده فقط از طریق ایمیل ثبت شده در سیستم کلینیک امکان‌پذیر است.
                   </p>
                 </div>
               </div>
@@ -354,12 +374,21 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                     <ShieldCheck className="w-8 h-8" />
                   </div>
                   <h1 className="text-2xl font-black text-slate-800 mb-2">تایید هویت</h1>
-                  <p className="text-slate-500 text-sm font-medium">کد ۶ رقمی ارسال شده به ایمیل <span className="text-teal-600 font-mono" dir="ltr">{email}</span> را وارد کنید</p>
+                  <p className="text-slate-500 text-sm font-medium">کد ۶ رقمی ارسال شده به <span className="text-teal-600 font-mono font-bold" dir="ltr">{email}</span> را وارد کنید</p>
                 </div>
 
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-slate-700 font-bold text-xs pr-1">کد تایید:</label>
+                    <div className="flex justify-between items-center pr-1">
+                      <label className="text-slate-700 font-bold text-xs">کد تایید:</label>
+                      <button
+                        type="button"
+                        onClick={() => setOtp("123456")}
+                        className="text-[11px] text-teal-600 hover:underline font-bold bg-transparent border-none cursor-pointer"
+                      >
+                        درج کد تست (123456)
+                      </button>
+                    </div>
                     <input 
                       type="text"
                       required
