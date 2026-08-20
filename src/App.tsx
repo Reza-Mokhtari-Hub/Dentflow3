@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Shield, 
   Phone, 
@@ -446,7 +446,42 @@ export default function App() {
     }
   };
 
+  const isSyncingBookingsRef = useRef(false);
+
+  /**
+   * Transaction Integrity Check:
+   * Validates matching ID, creation timestamp, and basic payload consistency
+   * between local and backend reservation records before marking as 'synced'.
+   */
+  const validateBookingIntegrity = (localB: any, serverB: any): boolean => {
+    if (!localB || !serverB) return false;
+
+    // 1. Validate ID match (case-insensitive)
+    const localId = String(localB.id || "").trim().toLowerCase();
+    const serverId = String(serverB.id || "").trim().toLowerCase();
+    if (!localId || !serverId || localId !== serverId) return false;
+
+    // 2. Validate timestamp existence and parseability
+    const localTs = new Date(localB.createdAt || localB.date || 0).getTime();
+    const serverTs = new Date(serverB.createdAt || serverB.date || 0).getTime();
+    if (isNaN(localTs) || isNaN(serverTs)) return false;
+
+    // 3. Validate key payload properties
+    if (localB.phone && serverB.phone) {
+      const cleanLocalPhone = String(localB.phone).replace(/\D/g, "");
+      const cleanServerPhone = String(serverB.phone).replace(/\D/g, "");
+      if (cleanLocalPhone && cleanServerPhone && !cleanLocalPhone.endsWith(cleanServerPhone) && !cleanServerPhone.endsWith(cleanLocalPhone)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const fetchAdminBookings = async () => {
+    if (isSyncingBookingsRef.current) return;
+    isSyncingBookingsRef.current = true;
+
     try {
       const res = await fetch("/api/bookings");
       let serverData: any[] = [];
@@ -454,7 +489,7 @@ export default function App() {
       
       if (res.ok) {
         serverData = await res.json().catch(() => []);
-        isServerHealthy = true;
+        isServerHealthy = Array.isArray(serverData);
       }
 
       // Read local storage bookings
@@ -470,35 +505,110 @@ export default function App() {
       }
 
       if (isServerHealthy) {
-        const serverIds = new Set(serverData.map((b: any) => String(b.id || "").toLowerCase()));
-        const merged = [...serverData];
+        // Map of server bookings indexed by lowercase ID
+        const serverMap = new Map<string, any>();
+        serverData.forEach((sb: any) => {
+          if (sb && sb.id) {
+            serverMap.set(String(sb.id).toLowerCase(), sb);
+          }
+        });
 
-        // Identify local bookings that need to be synced to backend database
+        const updatedLocalBookings: any[] = [];
+        const syncedServerList = [...serverData];
+
+        // Process each local booking through transaction integrity check
         for (const localB of localBookings) {
-          if (localB && localB.id && !serverIds.has(String(localB.id).toLowerCase())) {
-            merged.push(localB);
-            // Push unsynced booking to database in background
-            fetch("/api/bookings", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
+          if (!localB || !localB.id) continue;
+
+          const lowerId = String(localB.id).toLowerCase();
+          const existingServerB = serverMap.get(lowerId);
+
+          if (existingServerB) {
+            // Already present on server - perform transaction integrity verification
+            const isIntegrityValid = validateBookingIntegrity(localB, existingServerB);
+            if (isIntegrityValid) {
+              updatedLocalBookings.push({
                 ...localB,
-                fullName: localB.fullName,
-                phone: localB.phone,
-                email: localB.email,
-                serviceId: localB.serviceId,
-                date: localB.date,
-                timeSlot: localB.timeSlot,
-                notes: localB.notes
-              })
-            }).catch((err) => console.warn("Background booking database sync:", err));
+                ...existingServerB,
+                synced: true,
+                syncedAt: existingServerB.createdAt || localB.createdAt || new Date().toISOString(),
+                integrityVerified: true
+              });
+            } else {
+              // Discrepancy detected; retain local record with warning status to prevent silent data loss
+              console.warn(`[Integrity Warning] Booking ID ${localB.id} failed transaction integrity check.`);
+              updatedLocalBookings.push({
+                ...localB,
+                synced: false,
+                integrityVerified: false
+              });
+            }
+          } else {
+            // Not yet recorded on server - attempt synchronous atomic sync
+            try {
+              const syncRes = await fetch("/api/bookings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: localB.id,
+                  fullName: localB.fullName,
+                  phone: localB.phone,
+                  email: localB.email,
+                  serviceId: localB.serviceId,
+                  date: localB.date,
+                  timeSlot: localB.timeSlot,
+                  notes: localB.notes,
+                  createdAt: localB.createdAt || new Date().toISOString()
+                })
+              });
+
+              if (syncRes.ok) {
+                const createdServerB = await syncRes.json().catch(() => null);
+                if (createdServerB && validateBookingIntegrity(localB, createdServerB)) {
+                  // Transaction verified against backend response
+                  const verifiedBooking = {
+                    ...localB,
+                    ...createdServerB,
+                    synced: true,
+                    syncedAt: new Date().toISOString(),
+                    integrityVerified: true
+                  };
+                  updatedLocalBookings.push(verifiedBooking);
+                  serverMap.set(lowerId, verifiedBooking);
+                  syncedServerList.push(verifiedBooking);
+                } else {
+                  console.warn(`[Sync Integrity Failure] Server response failed integrity validation for ${localB.id}`);
+                  updatedLocalBookings.push({ ...localB, synced: false, integrityVerified: false });
+                }
+              } else {
+                updatedLocalBookings.push({ ...localB, synced: false });
+              }
+            } catch (syncErr) {
+              console.warn(`[Sync Network Error] Could not sync booking ${localB.id}:`, syncErr);
+              updatedLocalBookings.push({ ...localB, synced: false });
+            }
           }
         }
 
-        setAdminBookings(merged);
-        localStorage.setItem("df_bookings", JSON.stringify(merged));
+        // Deduplicate final list by unique ID (preserving newest version)
+        const dedupedMap = new Map<string, any>();
+        syncedServerList.forEach(b => {
+          if (b && b.id) dedupedMap.set(String(b.id).toLowerCase(), b);
+        });
+        updatedLocalBookings.forEach(b => {
+          if (b && b.id) {
+            const lowerId = String(b.id).toLowerCase();
+            if (!dedupedMap.has(lowerId) || b.synced) {
+              dedupedMap.set(lowerId, b);
+            }
+          }
+        });
+
+        const finalMergedList = Array.from(dedupedMap.values());
+        setAdminBookings(finalMergedList);
+        localStorage.setItem("df_bookings", JSON.stringify(finalMergedList));
       } else {
-        // Fallback to local data
+        // Fallback to local data if server is unreachable
         const local = localBookings.length > 0 ? localBookings : getLocalBookings();
         setAdminBookings(local);
       }
@@ -506,6 +616,8 @@ export default function App() {
       console.warn("fetchAdminBookings error, using local database:", err);
       const local = getLocalBookings();
       setAdminBookings(local);
+    } finally {
+      isSyncingBookingsRef.current = false;
     }
   };
 
@@ -748,10 +860,79 @@ export default function App() {
     window.location.hash = "#booking";
   };
 
-  // Pure Client Hash-Based Router for clean multi-page transition
+  // Dynamic Title, Canonical & SEO Meta tags updater for Google Search and users
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash || "#home";
+    if (selectedArticle) {
+      document.title = `${selectedArticle.title} | مقالات تخصصی کلینیک دنت فلو`;
+      
+      const descMeta = document.querySelector('meta[name="description"]');
+      if (descMeta) {
+        descMeta.setAttribute("content", selectedArticle.excerpt || selectedArticle.title);
+      }
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      if (ogTitle) {
+        ogTitle.setAttribute("content", `${selectedArticle.title} | کلینیک دنت فلو`);
+      }
+      const ogDesc = document.querySelector('meta[property="og:description"]');
+      if (ogDesc) {
+        ogDesc.setAttribute("content", selectedArticle.excerpt || selectedArticle.title);
+      }
+      const ogImage = document.querySelector('meta[property="og:image"]');
+      if (ogImage && selectedArticle.imageUrl) {
+        ogImage.setAttribute("content", selectedArticle.imageUrl.startsWith("http") ? selectedArticle.imageUrl : `https://dentflow.ir${selectedArticle.imageUrl}`);
+      }
+      const canonical = document.querySelector('link[rel="canonical"]');
+      if (canonical) {
+        canonical.setAttribute("href", `https://dentflow.ir/articles/${selectedArticle.id}`);
+      }
+    } else {
+      const sectionTitles: Record<string, string> = {
+        home: "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | DentFlow",
+        services: "خدمات تخصصی ایمپلنت، لمینت و ارتودنسی | کلینیک دنت فلو",
+        assistant: "مشاوره و دستیار هوشمند دندانپزشکی | دنت فلو",
+        about: "درباره کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو",
+        gallery: "گالری اصلاح لبخند و نمونه کارهای دندانپزشکی | دنت فلو",
+        articles: "مقالات و دانستنی‌های علمی دندانپزشکی | دنت فلو",
+        booking: "رزرو آنلاین نوبت دندانپزشکی | کلینیک دنت فلو",
+        contact: "تماس با کلینیک دندانپزشکی دنت فلو و آدرس مطب"
+      };
+      document.title = sectionTitles[activeSection] || "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | DentFlow";
+      
+      const canonical = document.querySelector('link[rel="canonical"]');
+      if (canonical) {
+        canonical.setAttribute("href", activeSection === "home" ? "https://dentflow.ir/" : `https://dentflow.ir/#${activeSection}`);
+      }
+    }
+  }, [selectedArticle, activeSection]);
+
+  // Pure Client Hash & Path Router for clean multi-page transition & direct URL support
+  useEffect(() => {
+    const handleUrlChange = () => {
+      let hash = window.location.hash || "#home";
+      const pathname = window.location.pathname || "";
+
+      // Support path-based URLs like /articles/1 or /article/1 or /services/1
+      if (pathname.startsWith("/articles/") || pathname.startsWith("/article/")) {
+        const pathParts = pathname.split("/");
+        const possibleId = parseInt(pathParts[pathParts.length - 1], 10);
+        if (!isNaN(possibleId)) {
+          hash = `#article/${possibleId}`;
+        }
+      } else if (pathname === "/booking") {
+        hash = "#booking";
+      } else if (pathname === "/articles") {
+        hash = "#articles";
+      } else if (pathname === "/services") {
+        hash = "#services";
+      } else if (pathname === "/about") {
+        hash = "#about";
+      } else if (pathname === "/contact") {
+        hash = "#contact";
+      } else if (pathname === "/gallery") {
+        hash = "#gallery";
+      } else if (pathname === "/assistant") {
+        hash = "#assistant";
+      }
       
       if (!hash.startsWith("#article/")) {
         setSelectedArticle(null);
@@ -796,9 +977,13 @@ export default function App() {
       }
     };
 
-    handleHashChange();
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
+    handleUrlChange();
+    window.addEventListener("hashchange", handleUrlChange);
+    window.addEventListener("popstate", handleUrlChange);
+    return () => {
+      window.removeEventListener("hashchange", handleUrlChange);
+      window.removeEventListener("popstate", handleUrlChange);
+    };
   }, [articles]);
 
   return (

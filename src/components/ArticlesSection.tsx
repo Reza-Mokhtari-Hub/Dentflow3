@@ -225,15 +225,29 @@ export default function ArticlesSection({
 
         {/* Back and Breadcrumbs Navigation bar */}
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl neo-border neo-shadow-dark mb-10" id="article-detail-header-actions">
-          <div className="flex items-center gap-2 text-xs text-[#1A3C3A] font-extrabold font-sans">
-            <span className="hover:text-[#0D9488] transition-colors cursor-pointer" onClick={() => setSelectedArticle(null)}>مقالات علمی</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[#1A3C3A] font-extrabold font-sans">
+            <span 
+              className="hover:text-[#0D9488] transition-colors cursor-pointer flex items-center gap-1" 
+              onClick={() => {
+                if (window.history.pushState) window.history.pushState(null, "", "/#articles");
+                window.location.hash = "#articles";
+                setSelectedArticle(null);
+              }}
+            >
+              <span>کلینیک دنت فلو</span>
+              <span>/</span>
+              <span>مقالات علمی</span>
+            </span>
             <span>/</span>
             <span className="bg-[#2DD4BF] text-[#1A3C3A] px-2.5 py-1 rounded-md border border-[#1A3C3A] text-[10px] uppercase font-black">{selectedArticle.category}</span>
             <span>/</span>
-            <span className="text-slate-500 line-clamp-1 max-w-[200px] sm:max-w-[300px]">{selectedArticle.title}</span>
+            <span className="text-[#0D9488] font-black line-clamp-1 max-w-[200px] sm:max-w-[400px]">
+              {selectedArticle.title}
+            </span>
           </div>
           <button
             onClick={() => {
+              if (window.history.pushState) window.history.pushState(null, "", "/#articles");
               window.location.hash = "#articles";
               setSelectedArticle(null);
               window.scrollTo({ top: 0, behavior: "smooth" });

@@ -798,8 +798,289 @@ async function persistState() {
 
     await mkdir(path.dirname(stateFilePath), { recursive: true });
     await writeFile(stateFilePath, JSON.stringify(payload, null, 2), "utf-8");
+    
+    // Automatically keep static sitemap in sync on disk whenever state updates
+    await updateStaticSitemapOnDisk();
   } catch (error) {
     console.error("Error persisting state:", error);
+  }
+}
+
+function escapeXml(unsafe: string): string {
+  if (!unsafe) return "";
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function renderPageHtml(reqPath: string, rawHtml: string, req: express.Request): string {
+  const host = req.get("host");
+  const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
+  const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
+  
+  let pageTitle = "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | DentFlow";
+  let metaDesc = "مرکز تخصصی ایمپلنت دیجیتال، اصلاح طرح لبخند، لمینت سرامیکی E-Max، ارتودنسی نامرئی و مقالات علمی و تخصصی دندانپزشکی در کلینیک دنت فلو.";
+  let canonicalUrl = `${baseUrl}/`;
+  let ogImage = `${baseUrl}/images/blog-implant.svg`;
+  let ogType = "website";
+  let articleJsonLd = "";
+  let preRenderedBody = "";
+
+  // 1. Check article route: /articles/:id or /article/:id
+  const articleMatch = reqPath.match(/^\/(?:articles|article)\/([^\/?#]+)/i);
+  if (articleMatch) {
+    const rawId = articleMatch[1];
+    const numId = parseInt(rawId, 10);
+    const post = blogPosts.find(p => p.id === numId || String(p.id) === rawId || encodeURIComponent(p.title) === rawId);
+    if (post) {
+      pageTitle = `${post.title} | کلینیک دندانپزشکی دنت فلو`;
+      metaDesc = (post.excerpt || post.title).replace(/\r?\n|\r/g, " ").trim();
+      canonicalUrl = `${baseUrl}/articles/${post.id}`;
+      if (post.imageUrl) {
+        ogImage = post.imageUrl.startsWith("http") ? post.imageUrl : `${baseUrl}${post.imageUrl.startsWith("/") ? "" : "/"}${post.imageUrl}`;
+      }
+      ogType = "article";
+
+      // Rich Schema.org BlogPosting for Google Search indexing & Rich snippets
+      const schemaData = {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": canonicalUrl
+        },
+        "headline": post.title,
+        "description": metaDesc,
+        "image": [ogImage],
+        "datePublished": "2026-01-01T08:00:00+03:30",
+        "dateModified": new Date().toISOString(),
+        "articleSection": post.category || "دندانپزشکی",
+        "author": {
+          "@type": "Person",
+          "name": clinicConfig?.articleDoctorName || "دکتر مریم رضایی",
+          "jobTitle": "متخصص جراحی لثه و ایمپلنت"
+        },
+        "publisher": {
+          "@type": "MedicalClinic",
+          "name": "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو",
+          "logo": {
+            "@type": "ImageObject",
+            "url": `${baseUrl}/favicon.svg`
+          }
+        }
+      };
+      articleJsonLd = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaData, null, 2)}\n    </script>`;
+      preRenderedBody = `
+    <div id="seo-prerender" style="display:none;" aria-hidden="true">
+      <h1>${escapeXml(post.title)}</h1>
+      <p>دسته‌بندی: ${escapeXml(post.category)} | زمان مطالعه: ${escapeXml(post.readTime)} | کلینیک دندانپزشکی دنت فلو</p>
+      <p>${escapeXml(post.excerpt)}</p>
+      <div>${post.content || ""}</div>
+    </div>`;
+    }
+  } else if (reqPath.match(/^\/(?:services|service)\/([^\/?#]+)/i)) {
+    const rawId = reqPath.match(/^\/(?:services|service)\/([^\/?#]+)/i)![1];
+    const srv = services.find(s => s.id === rawId || String(s.id) === rawId);
+    if (srv) {
+      pageTitle = `${srv.title} | خدمات تخصصی دندانپزشکی دنت فلو`;
+      metaDesc = (srv.description || srv.title).replace(/\r?\n|\r/g, " ").trim();
+      canonicalUrl = `${baseUrl}/services/${srv.id}`;
+      ogType = "service";
+      const schemaData = {
+        "@context": "https://schema.org",
+        "@type": "MedicalProcedure",
+        "name": srv.title,
+        "description": metaDesc,
+        "provider": {
+          "@type": "MedicalClinic",
+          "name": "کلینیک تخصصی دندانپزشکی دنت فلو",
+          "url": baseUrl
+        }
+      };
+      articleJsonLd = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaData, null, 2)}\n    </script>`;
+      preRenderedBody = `
+    <div id="seo-prerender" style="display:none;" aria-hidden="true">
+      <h1>${escapeXml(srv.title)}</h1>
+      <p>${escapeXml(srv.description)}</p>
+    </div>`;
+    }
+  } else if (reqPath.startsWith("/booking")) {
+    pageTitle = "رزرو آنلاین نوبت دندانپزشکی و معاینه دیجیتال | کلینیک دنت فلو";
+    metaDesc = "نوبت‌دهی آنلاین ۲۴ ساعته کلینیک تخصصی دندانپزشکی دنت فلو با انتخاب زمان و دکتر متخصص";
+    canonicalUrl = `${baseUrl}/#booking`;
+  } else if (reqPath.startsWith("/articles")) {
+    pageTitle = "مقالات و دانستنی‌های علمی دندانپزشکی | کلینیک دنت فلو";
+    metaDesc = "مجموعه مقالات آموزشی و علمی درباره ایمپلنت دیجیتال، لمینت سرامیکی، کامپوزیت و مراقبت دهان و دندان";
+    canonicalUrl = `${baseUrl}/#articles`;
+  } else if (reqPath.startsWith("/services")) {
+    pageTitle = "خدمات تخصصی دندانپزشکی دیجیتال و زیبایی | کلینیک دنت فلو";
+    metaDesc = "خدمات جامع ایمپلنت فوری، لمینت E-Max، ارتودنسی نامرئی، عصب‌کشی دیجیتال و بلیچینگ دندان";
+    canonicalUrl = `${baseUrl}/#services`;
+  } else if (reqPath.startsWith("/gallery")) {
+    pageTitle = "گالری اصلاح طرح لبخند و نمونه درمان‌ها | کلینیک دنت فلو";
+    metaDesc = "تصاویر نمونه کارهای قبل و بعد ایمپلنت و لمینت سرامیکی مراجعین کلینیک دندانپزشکی دنت فلو";
+    canonicalUrl = `${baseUrl}/#gallery`;
+  } else if (reqPath.startsWith("/about")) {
+    pageTitle = "درباره کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | تجهیزات و پزشکان";
+    metaDesc = "آشنایی با کادر متخصص، افتخارات، تجهیزات پیشرفته دیجیتال و استانداردهای درمانی کلینیک دنت فلو";
+    canonicalUrl = `${baseUrl}/#about`;
+  } else if (reqPath.startsWith("/contact")) {
+    pageTitle = "تماس با کلینیک دندانپزشکی دنت فلو | آدرس، تلفن و لوکیشن";
+    metaDesc = "شماره تلفن‌ها، آدرس مطب، ساعت کاری و راه‌های ارتباطی با کلینیک دندانپزشکی دنت فلو";
+    canonicalUrl = `${baseUrl}/#contact`;
+  } else if (reqPath.startsWith("/assistant")) {
+    pageTitle = "دستیار هوشمند و مشاوره هوش مصنوعی دندانپزشکی | کلینیک دنت فلو";
+    metaDesc = "مشاوره آنلاین هوشمند علائم، برآورد اولیه درمان و راهنمای بهداشت دهان و دندان با هوش مصنوعی دنت فلو";
+    canonicalUrl = `${baseUrl}/#assistant`;
+  }
+
+  let html = rawHtml;
+
+  // Replace Title tag
+  html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeXml(pageTitle)}</title>`);
+  
+  // Replace or inject meta tags
+  html = html.replace(/<meta name="title" content="[\s\S]*?"\s*\/?>/i, `<meta name="title" content="${escapeXml(pageTitle)}" />`);
+  html = html.replace(/<meta name="description" content="[\s\S]*?"\s*\/?>/i, `<meta name="description" content="${escapeXml(metaDesc)}" />`);
+  html = html.replace(/<link rel="canonical" href="[\s\S]*?"\s*\/?>/i, `<link rel="canonical" href="${escapeXml(canonicalUrl)}" />`);
+  html = html.replace(/<meta property="og:title" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:title" content="${escapeXml(pageTitle)}" />`);
+  html = html.replace(/<meta property="og:description" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:description" content="${escapeXml(metaDesc)}" />`);
+  html = html.replace(/<meta property="og:url" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:url" content="${escapeXml(canonicalUrl)}" />`);
+  html = html.replace(/<meta property="og:image" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:image" content="${escapeXml(ogImage)}" />`);
+  html = html.replace(/<meta property="og:type" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:type" content="${escapeXml(ogType)}" />`);
+  html = html.replace(/<meta property="twitter:title" content="[\s\S]*?"\s*\/?>/i, `<meta property="twitter:title" content="${escapeXml(pageTitle)}" />`);
+  html = html.replace(/<meta property="twitter:description" content="[\s\S]*?"\s*\/?>/i, `<meta property="twitter:description" content="${escapeXml(metaDesc)}" />`);
+  html = html.replace(/<meta property="twitter:image" content="[\s\S]*?"\s*\/?>/i, `<meta property="twitter:image" content="${escapeXml(ogImage)}" />`);
+
+  if (articleJsonLd) {
+    html = html.replace("</head>", `${articleJsonLd}\n  </head>`);
+  }
+  if (preRenderedBody) {
+    html = html.replace('<div id="root"></div>', `${preRenderedBody}\n    <div id="root"></div>`);
+  }
+
+  return html;
+}
+
+function generateSitemapXml(customBaseUrl?: string): string {
+  const defaultDomain = "https://dentflow.ir";
+  const baseUrl = (customBaseUrl || process.env.APP_URL || defaultDomain).replace(/\/+$/, "");
+  const today = new Date().toISOString().split("T")[0];
+
+  const coreRoutes = [
+    { loc: `${baseUrl}/`, changefreq: "daily", priority: "1.0", lastmod: today },
+    { loc: `${baseUrl}/#services`, changefreq: "weekly", priority: "0.9", lastmod: today },
+    { loc: `${baseUrl}/#booking`, changefreq: "daily", priority: "0.95", lastmod: today },
+    { loc: `${baseUrl}/#articles`, changefreq: "daily", priority: "0.9", lastmod: today },
+    { loc: `${baseUrl}/#gallery`, changefreq: "weekly", priority: "0.85", lastmod: today },
+    { loc: `${baseUrl}/#assistant`, changefreq: "weekly", priority: "0.8", lastmod: today },
+    { loc: `${baseUrl}/#about`, changefreq: "monthly", priority: "0.75", lastmod: today },
+    { loc: `${baseUrl}/#contact`, changefreq: "monthly", priority: "0.75", lastmod: today },
+    { loc: `${baseUrl}/#portal`, changefreq: "monthly", priority: "0.6", lastmod: today }
+  ];
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+`;
+
+  // Core Sections
+  for (const route of coreRoutes) {
+    xml += `  <url>
+    <loc>${escapeXml(route.loc)}</loc>
+    <lastmod>${route.lastmod}</lastmod>
+    <changefreq>${route.changefreq}</changefreq>
+    <priority>${route.priority}</priority>
+  </url>
+`;
+  }
+
+  // Clinic Services
+  if (Array.isArray(services)) {
+    for (const service of services) {
+      if (!service || !service.id) continue;
+      xml += `  <url>
+    <loc>${escapeXml(`${baseUrl}/#service-${service.id}`)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+`;
+      xml += `  <url>
+    <loc>${escapeXml(`${baseUrl}/services/${service.id}`)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+`;
+    }
+  }
+
+  // All Dynamic Articles & Blog Posts (Automatically updated when articles are added or modified)
+  if (Array.isArray(blogPosts)) {
+    for (const post of blogPosts) {
+      if (!post || !post.id) continue;
+      const postHashUrl = `${baseUrl}/#article/${post.id}`;
+      const postPathUrl = `${baseUrl}/articles/${post.id}`;
+
+      let postImageLoc = "";
+      if (post.imageUrl) {
+        if (post.imageUrl.startsWith("http://") || post.imageUrl.startsWith("https://")) {
+          postImageLoc = post.imageUrl;
+        } else {
+          postImageLoc = `${baseUrl}${post.imageUrl.startsWith("/") ? "" : "/"}${post.imageUrl}`;
+        }
+      }
+
+      xml += `  <url>
+    <loc>${escapeXml(postHashUrl)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+${postImageLoc ? `    <image:image>
+      <image:loc>${escapeXml(postImageLoc)}</image:loc>
+      <image:title>${escapeXml(post.title || "")}</image:title>
+      <image:caption>${escapeXml(post.excerpt || post.title || "")}</image:caption>
+    </image:image>
+` : ""}  </url>
+`;
+
+      xml += `  <url>
+    <loc>${escapeXml(postPathUrl)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+`;
+    }
+  }
+
+  xml += `</urlset>`;
+  return xml;
+}
+
+async function updateStaticSitemapOnDisk() {
+  try {
+    const sitemapContent = generateSitemapXml("https://dentflow.ir");
+    const publicSitemapPath = path.join(process.cwd(), "public", "sitemap.xml");
+    await mkdir(path.dirname(publicSitemapPath), { recursive: true });
+    await writeFile(publicSitemapPath, sitemapContent, "utf-8");
+
+    // Also update in dist/sitemap.xml if dist directory exists
+    const distSitemapPath = path.join(process.cwd(), "dist", "sitemap.xml");
+    try {
+      await writeFile(distSitemapPath, sitemapContent, "utf-8");
+    } catch {
+      // dist may not exist yet in dev mode, safe to ignore
+    }
+    console.log(`[SEO Engine] Dynamic sitemap.xml synchronized with ${blogPosts.length} articles.`);
+  } catch (err) {
+    console.error("[SEO Engine] Error writing static sitemap.xml:", err);
   }
 }
 
@@ -1005,6 +1286,60 @@ export async function createExpressApp() {
 
   // Load persistence state from JSON file
   await loadState();
+
+  // Initialize static sitemap on disk with all loaded articles and pages
+  await updateStaticSitemapOnDisk();
+
+  // Dynamic XML Sitemap for Google Search Console and web crawlers
+  app.get("/sitemap.xml", (req, res) => {
+    const host = req.get("host");
+    const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
+    const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
+    const xml = generateSitemapXml(baseUrl);
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=60, s-maxage=60");
+    res.send(xml);
+  });
+
+  // Dynamic robots.txt
+  app.get("/robots.txt", (req, res) => {
+    const host = req.get("host");
+    const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
+    const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
+    const robots = `User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+
+Sitemap: ${baseUrl}/sitemap.xml
+`;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(robots);
+  });
+
+  // API Route: Sitemap Status & Diagnostics
+  app.get("/api/sitemap", (req, res) => {
+    const host = req.get("host");
+    const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
+    const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
+    res.json({
+      success: true,
+      baseUrl,
+      sitemapUrl: `${baseUrl}/sitemap.xml`,
+      totalArticles: blogPosts.length,
+      totalServices: services.length,
+      articleUrls: blogPosts.map(p => ({
+        id: p.id,
+        title: p.title,
+        hashUrl: `${baseUrl}/#article/${p.id}`,
+        pathUrl: `${baseUrl}/articles/${p.id}`,
+        imageUrl: p.imageUrl,
+        date: p.date
+      })),
+      lastUpdated: new Date().toISOString()
+    });
+  });
 
   // API Route: Upload image as base64
   app.post("/api/upload", authenticateAdmin, async (req, res) => {
@@ -1266,12 +1601,20 @@ export async function createExpressApp() {
   // API Route: Create new booking
   app.post("/api/bookings", async (req, res) => {
     try {
-      const { fullName, phone, email, serviceId, date, timeSlot, notes } = req.body || {};
+      const { id, fullName, phone, email, serviceId, date, timeSlot, notes, createdAt } = req.body || {};
       if (!fullName || !phone || !date) {
         return res.status(400).json({ error: "نام و نام خانوادگی، شماره تماس و تاریخ الزامی هستند." });
       }
 
-      const refCode = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
+      // Idempotency: Check if booking with provided ID already exists
+      if (id) {
+        const existingById = bookings.find(b => String(b.id).toLowerCase() === String(id).toLowerCase());
+        if (existingById) {
+          return res.json(existingById);
+        }
+      }
+
+      const refCode = id ? String(id).trim() : `DF-${Math.floor(100000 + Math.random() * 900000)}`;
       const newBooking: Booking = {
         id: refCode,
         fullName: String(fullName).trim(),
@@ -1282,7 +1625,7 @@ export async function createExpressApp() {
         timeSlot: timeSlot === "afternoon" ? "afternoon" : "morning",
         notes: notes ? String(notes).trim() : "",
         status: "pending",
-        createdAt: new Date().toISOString(),
+        createdAt: createdAt ? String(createdAt) : new Date().toISOString(),
         adminComment: ""
       };
 
@@ -2002,12 +2345,35 @@ ${existingContent}`;
       server: { middlewareMode: true },
       appType: "spa",
     });
+
+    // SSR Meta Injection route for HTML requests in dev
+    app.get(["/", "/articles", "/articles/*", "/article/*", "/services", "/services/*", "/service/*", "/booking", "/about", "/contact", "/gallery", "/assistant"], async (req, res, next) => {
+      try {
+        const indexPath = path.join(process.cwd(), "index.html");
+        let template = await readFile(indexPath, "utf-8");
+        template = await vite.transformIndexHtml(req.originalUrl, template);
+        const processedHtml = renderPageHtml(req.path, template, req);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(processedHtml);
+      } catch (err) {
+        next(err);
+      }
+    });
+
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath, { index: false }));
+    app.get("*", async (req, res) => {
+      const indexPath = path.join(distPath, "index.html");
+      try {
+        const rawHtml = await readFile(indexPath, "utf-8");
+        const processedHtml = renderPageHtml(req.path, rawHtml, req);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(processedHtml);
+      } catch (err) {
+        res.sendFile(indexPath);
+      }
     });
   }
 
