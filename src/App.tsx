@@ -447,24 +447,65 @@ export default function App() {
   };
 
   const fetchAdminBookings = async () => {
-    if (useLocalDb) {
-      setAdminBookings(getLocalBookings());
-      return;
-    }
     try {
       const res = await fetch("/api/bookings");
+      let serverData: any[] = [];
+      let isServerHealthy = false;
+      
       if (res.ok) {
-        const data = await res.json();
-        setAdminBookings(data);
+        serverData = await res.json().catch(() => []);
+        isServerHealthy = true;
+      }
+
+      // Read local storage bookings
+      const localStr = localStorage.getItem("df_bookings");
+      let localBookings: any[] = [];
+      if (localStr) {
+        try {
+          const parsed = JSON.parse(localStr);
+          if (Array.isArray(parsed)) localBookings = parsed;
+        } catch {
+          localBookings = [];
+        }
+      }
+
+      if (isServerHealthy) {
+        const serverIds = new Set(serverData.map((b: any) => String(b.id || "").toLowerCase()));
+        const merged = [...serverData];
+
+        // Identify local bookings that need to be synced to backend database
+        for (const localB of localBookings) {
+          if (localB && localB.id && !serverIds.has(String(localB.id).toLowerCase())) {
+            merged.push(localB);
+            // Push unsynced booking to database in background
+            fetch("/api/bookings", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...localB,
+                fullName: localB.fullName,
+                phone: localB.phone,
+                email: localB.email,
+                serviceId: localB.serviceId,
+                date: localB.date,
+                timeSlot: localB.timeSlot,
+                notes: localB.notes
+              })
+            }).catch((err) => console.warn("Background booking database sync:", err));
+          }
+        }
+
+        setAdminBookings(merged);
+        localStorage.setItem("df_bookings", JSON.stringify(merged));
       } else {
-        setUseLocalDb(true);
-        localStorage.setItem("df_use_local_db", "true");
-        setAdminBookings(getLocalBookings());
+        // Fallback to local data
+        const local = localBookings.length > 0 ? localBookings : getLocalBookings();
+        setAdminBookings(local);
       }
     } catch (err) {
-      setUseLocalDb(true);
-      localStorage.setItem("df_use_local_db", "true");
-      setAdminBookings(getLocalBookings());
+      console.warn("fetchAdminBookings error, using local database:", err);
+      const local = getLocalBookings();
+      setAdminBookings(local);
     }
   };
 
@@ -487,10 +528,17 @@ export default function App() {
   useEffect(() => {
     fetchAdminBookings();
 
+    // Listen for storage events (e.g. from booking creation)
+    const handleStorageChange = () => {
+      fetchAdminBookings();
+    };
+    window.addEventListener("storage", handleStorageChange);
+
     // If logged in as admin, fetch latest bookings and messages from server every 15 seconds to ensure live updates
-    if (!useLocalDb && adminToken) {
+    let intervalId: any;
+    if (adminToken) {
       fetchMessages();
-      const intervalId = setInterval(() => {
+      intervalId = setInterval(() => {
         fetchAdminBookings();
         fetchMessages();
         
@@ -505,9 +553,12 @@ export default function App() {
           .catch(err => console.warn("Polling state error:", err));
           
       }, 15000);
-      return () => clearInterval(intervalId);
     }
-  }, [useLocalDb, adminToken]);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [adminToken]);
 
   const updateBookingStatus = async (id: string, status: string) => {
     if (useLocalDb) {

@@ -127,6 +127,12 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
     setError("");
     const cleanEmail = email.trim().toLowerCase();
 
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setError("لطفاً یک نشانی ایمیل معتبر وارد فرمایید.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/patient/request-otp", {
         method: "POST",
@@ -135,7 +141,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
       });
       const data = await res.json();
       if (res.ok) {
-        if (data.message) toast.info(data.message, 6000);
+        toast.success(data.message || "کد تایید یکبار مصرف به نشانی ایمیل شما ارسال شد.");
         setStep("otp");
         setLoading(false);
         return;
@@ -143,29 +149,9 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
         setError(data.error || "خطا در ارسال کد تایید.");
       }
     } catch (err) {
-      console.warn("Server request OTP failed, checking local patients...", err);
+      console.warn("Server request OTP failed:", err);
+      setError("خطا در برقراری ارتباط با سرور. لطفاً دوباره تلاش کنید.");
     }
-
-    // Local Storage Fallback
-    try {
-      const savedPatientsStr = localStorage.getItem("df_patients");
-      if (savedPatientsStr) {
-        const localPatients = JSON.parse(savedPatientsStr);
-        const found = localPatients.find((p: any) => 
-          p.email && p.email.toLowerCase() === cleanEmail
-        );
-        if (found) {
-          toast.info("کد تایید آزمایشی شما: 123456", 8000);
-          setStep("otp");
-          setLoading(false);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Local patient search error:", e);
-    }
-
-    if (!error) setError("بیماری با این نشانی ایمیل یافت نشد. لطفاً ایمیل خود را با دقت وارد فرمایید.");
     setLoading(false);
   };
 
@@ -179,7 +165,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
       const res = await fetch("/api/patient/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, code: otp })
+        body: JSON.stringify({ email: cleanEmail, code: otp.trim() })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -188,44 +174,12 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
         setLoading(false);
         return;
       } else {
-        setError(data.error || "کد تایید اشتباه است.");
+        setError(data.error || "کد تایید اشتباه است یا منقضی شده است.");
       }
     } catch (err) {
-      console.warn("Server verify OTP failed, checking local fallback...", err);
+      console.warn("Server verify OTP failed:", err);
+      setError("خطا در برقراری ارتباط با سرور.");
     }
-
-    // Local Fallback Verification
-    if (otp === "123456" || otp.length === 6) {
-      try {
-        const savedPatientsStr = localStorage.getItem("df_patients");
-        if (savedPatientsStr) {
-          const localPatients = JSON.parse(savedPatientsStr);
-          const found = localPatients.find((p: any) => 
-            p.email && p.email.toLowerCase() === cleanEmail
-          );
-          if (found) {
-            // Populate full patient data structure
-            setPatientData({
-              ...found,
-              treatmentPlan: found.treatmentPlan || [],
-              prescriptions: found.prescriptions || [],
-              medicalPhotos: found.medicalPhotos || [],
-              chat: found.chat || [],
-              bookings: JSON.parse(localStorage.getItem("df_bookings") || "[]").filter((b: any) => 
-                b.email && b.email.toLowerCase() === cleanEmail
-              )
-            });
-            setStep("dashboard");
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn("Local verify fallback error:", e);
-      }
-    }
-
-    if (!error) setError("کد تایید وارد شده معتبر نیست.");
     setLoading(false);
   };
 
@@ -320,32 +274,10 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                   </button>
                 </form>
 
-                {/* Quick Demo Emails for instant testing */}
-                <div className="mt-6 pt-4 border-t border-slate-100">
-                  <span className="text-[11px] font-bold text-slate-400 block mb-2 text-center">ایمیل‌های تستی جهت ورود فوری به پرونده‌ها:</span>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {[
-                      { name: "سارا احمدی", email: "sara@dentflow.ir" },
-                      { name: "محمد قاسمی", email: "mohammad@dentflow.ir" },
-                      { name: "نیلوفر راد", email: "niloufar@dentflow.ir" },
-                      { name: "ایمیل شما", email: "reza2015zzzx@gmail.com" }
-                    ].map((demo) => (
-                      <button
-                        key={demo.email}
-                        type="button"
-                        onClick={() => setEmail(demo.email)}
-                        className="text-[11px] bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-teal-200/60"
-                      >
-                        {demo.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3 bg-slate-50/50 p-4 rounded-2xl">
                   <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0" />
                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    امنیت اطلاعات شما اولویت ماست. دسترسی به پرونده فقط از طریق ایمیل ثبت شده در سیستم کلینیک امکان‌پذیر است.
+                    امنیت اطلاعات شما اولویت ماست. کد ورود یکبار مصرف به نشانی ایمیل شما ارسال می‌شود.
                   </p>
                 </div>
               </div>
@@ -379,16 +311,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
 
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center pr-1">
-                      <label className="text-slate-700 font-bold text-xs">کد تایید:</label>
-                      <button
-                        type="button"
-                        onClick={() => setOtp("123456")}
-                        className="text-[11px] text-teal-600 hover:underline font-bold bg-transparent border-none cursor-pointer"
-                      >
-                        درج کد تست (123456)
-                      </button>
-                    </div>
+                    <label className="text-slate-700 font-bold text-xs pr-1">کد تایید ۶ رقمی:</label>
                     <input 
                       type="text"
                       required

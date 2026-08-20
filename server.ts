@@ -1289,7 +1289,18 @@ export async function createExpressApp() {
       bookings.unshift(newBooking);
 
       // Auto-link or create patient record if phone exists
-      const normalizePhone = (p: string) => p ? p.replace(/[\s\-\(\)\+]/g, "").replace(/^0098|^98/, "0").trim() : "";
+      const normalizePhone = (p: string) => {
+        if (!p) return "";
+        let digits = String(p)
+          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
+          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
+          .replace(/[\s\-\(\)\+]/g, "")
+          .trim();
+        if (digits.startsWith("0098")) digits = "0" + digits.slice(4);
+        else if (digits.startsWith("98")) digits = "0" + digits.slice(2);
+        else if (digits.startsWith("9") && digits.length === 10) digits = "0" + digits;
+        return digits;
+      };
       const cleanPhone = normalizePhone(newBooking.phone);
       let existingPatient = patients.find(p => normalizePhone(p.phone) === cleanPhone);
 
@@ -1509,10 +1520,11 @@ export async function createExpressApp() {
         emailSent = await sendEmail(patient.email, "کد تایید ورود به داشبورد بیمار - دنت فلو", bodyHtml);
       }
       
+      console.log(`[Patient OTP Created] Email: ${cleanInput} | Sent: ${emailSent}`);
+
       return res.json({ 
         success: true, 
-        message: `کد تایید ورود: ${code}`,
-        demoCode: code
+        message: "کد تایید یکبار مصرف به نشانی ایمیل شما ارسال شد."
       });
     } catch (err: any) {
       console.error("Patient OTP request error:", err);
@@ -1527,13 +1539,15 @@ export async function createExpressApp() {
       if (!email || !code) return res.status(400).json({ error: "اطلاعات ورودی و کد تایید الزامی هستند." });
 
       const cleanInput = email.trim().toLowerCase();
+      const cleanCode = code.toString().trim();
 
       const stored = patientOtps.get(cleanInput);
-      // Also allow universal master demo code 123456 or exact OTP
-      const isMasterCode = code === "123456";
-      if (!isMasterCode && (!stored || stored.code !== code || stored.expires < Date.now())) {
+      if (!stored || stored.code !== cleanCode || stored.expires < Date.now()) {
         return res.status(401).json({ error: "کد تایید اشتباه است یا منقضی شده است." });
       }
+
+      // Invalidate used OTP
+      patientOtps.delete(cleanInput);
 
       // OTP verified - Find patient and gather all data
       let patient = patients.find(p => 
