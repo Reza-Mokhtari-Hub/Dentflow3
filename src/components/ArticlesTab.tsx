@@ -1222,10 +1222,10 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
 
                     <div className="flex flex-col space-y-4" id="editor-main-canvas">
                       {/* Rich Editor + Preview */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[550px]">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[1500px] min-h-0">
                         {/* Editor side */}
-                        <div className="flex flex-col h-full space-y-1 relative">
-                          <div className="flex justify-between items-center px-1">
+                        <div className="flex flex-col h-full space-y-1 relative min-h-0">
+                          <div className="flex justify-between items-center px-1 shrink-0">
                             <span className="text-[10px] text-slate-400 font-bold">از نوار ابزار بالا برای فرمت‌بندی استفاده کنید. جادوی هوش مصنوعی نیز در دسترس است.</span>
                             <span className="text-[10px] font-black text-teal-600">پنل ویرایشگر حرفه‌ای</span>
                           </div>
@@ -1239,12 +1239,12 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         </div>
 
                         {/* Live Rendered Side */}
-                        <div className="flex flex-col h-full space-y-1">
-                          <div className="flex justify-between items-center px-1">
+                        <div className="flex flex-col h-full space-y-1 min-h-0">
+                          <div className="flex justify-between items-center px-1 shrink-0">
                             <span className="text-[10px] font-black text-indigo-600">پیش‌نمایش زنده و رندر شده</span>
                             <span className="text-[10px] text-slate-400 font-bold">نمایش استایل نهایی مقاله در وب‌سایت</span>
                           </div>
-                          <div className="w-full flex-1 p-5 bg-slate-50/30 border border-slate-100 rounded-2xl overflow-y-auto text-right font-sans select-none prose prose-slate">
+                          <div className="w-full flex-1 p-5 bg-slate-50/30 border border-slate-100 rounded-2xl overflow-y-auto text-right font-sans select-none prose prose-slate min-h-0">
                             {renderMarkdown(formContent)}
                           </div>
                         </div>
