@@ -1,114 +1,142 @@
-# پلتفرم جامع کلینیک دندانپزشکی دنت فلو (DentFlow)
+# DentFlow — Dental Clinic Web Platform & Management System
 
-یک وب‌اپلیکیشن فول‌استک (Full-Stack) برای مدیریت کامل کلینیک دندانپزشکی، نوبت‌دهی آنلاین با تقویم شمسی، پرونده الکترونیک و چارت دندانی بیماران، سیستم حسابداری و پنل اختصاصی مراجعین.
+A full-stack web application built for modern dental clinics, featuring a Persian (RTL) public website, online appointment booking with a Jalali calendar, a patient portal with OTP authentication, and a multi-module clinic admin dashboard.
 
-این پروژه با هدف یکپارچه‌سازی وب‌سایت معرفی کلینیک و نرم‌افزار داخلی مطب طراحی و پیاده‌سازی شده است تا بدون نیاز به سیستم‌های جداگانه، تمام فرآیندها از نوبت‌گیری بیمار تا ثبت طرح درمان، نسخه و مدیریت مالی در یک محیط واحد انجام شود.
-
----
-
-## امکانات و بخش‌های سیستم
-
-### وب‌سایت عمومی کلینیک (RTL)
-- **نوبت‌دهی آنلاین شمسی:** انتخاب تاریخ از روی تقویم جلالی (`JalaliDatePicker`) همراه با کنترل ظرفیت شیفت صبح و عصر و ارسال تاییدیه ایمیلی.
-- **گالری لبخند (قبل و بعد):** نمایش نمونه‌کارهای درمانی با امکان مدیریت تصاویر از پنل ادمین.
-- **معرفی خدمات و تعرفه‌ها:** لیست پویا و قابل ویرایش خدمات تخصصی (ایمپلنت، لمینت، کامپوزیت، ارتودنسی و درمان ریشه).
-- **وبلاگ و مقالات آموزشی:** سیستم مدیریت محتوا با ویرایشگر متن پیشرفته و پاک‌سازی امن خروجی HTML جهت جلوگیری از XSS.
-- **بخش مشاوره آنلاین:** ویجت گفتگوی آنلاین برای پاسخگویی به سوالات رایج بیماران درباره خدمات و شرایط پرداخت.
-- **پشتیبانی از حالت شب/روز (Dark/Light Mode):** طراحی واکنش‌گرا و سازگار با موبایل و دسکتاپ.
-
-### پرتال اختصاصی بیماران
-- ورود بیمار با کد ملی یا شماره پرونده
-- مشاهده چارت دندانی ۳۲ تایی با وضعیت دقیق هر دندان (سالم، ترمیم‌شده، پوسیده، کشیده‌شده)
-- پیگیری مراحل طرح درمان و برآورد هزینه‌ها
-- دسترسی به سوابق نسخه‌های دارویی ثبت‌شده
-
-### پنل مدیریت کلینیک (Admin Dashboard)
-- **مدیریت نوبت‌ها:** بررسی، تایید یا تغییر وضعیت درخواست‌های رزرو و کنترل ظرفیت شیفت‌ها.
-- **پرونده بیماران و چارت دندان:** ثبت بیمار جدید، ویرایش تعاملی وضعیت تک‌تک دندان‌ها، ثبت طرح درمان و صدور نسخه دیجیتال.
-- **امور مالی و حسابداری:** ثبت درآمدها، هزینه‌های کلینیک و گزارش‌گیری از تراکنش‌ها.
-- **آمار و گزارش‌ها:** نمودارهای تحلیلی وضعیت مراجعات و عملکرد مالی با `Recharts`.
-- **تنظیمات و امنیت:** مدیریت اطلاعات تماس، ساعات کاری، تغییر رمز عبور مدیر و تنظیم محتوای بخش‌های مختلف سایت.
+Developed and maintained by **[Reza Mokhtari](https://github.com/Reza-Mokhtari-Hub)**.
 
 ---
 
-## تکنولوژی‌های استفاده‌شده
+## Overview
 
-- **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS v4, Motion, Lucide Icons, Recharts, React Quill
-- **Backend:** Node.js, Express, TypeScript (`tsx` / `esbuild`)
-- **Database:** MongoDB & Mongoose (دارای لایه In-Memory Fallback در صورت عدم اتصال به دیتابیس خارجی)
-- **Security & Utilities:** DOMPurify، رمزنگاری SHA-256 برای نشست‌ها، Nodemailer برای ارسال ایمیل
-- **Deployment:** آماده برای اجرا روی سرور Node.js و دیپلوی روی Vercel (`vercel.json`)
+DentFlow combines a clinic landing experience with day-to-day operational tools in a single codebase. Patients can browse treatments, inspect before-and-after smile cases, read dental care articles, book appointments by shift capacity, and log into their personal portal to track treatment plans and prescriptions. Clinic staff get an integrated dashboard covering appointments, 32-tooth dental charting, billing, content publishing, and analytics.
 
 ---
 
-## ساختار کلی پروژه
+## Features
+
+### Public Website & Booking
+- **RTL Persian Interface**: Responsive layout with light/dark theme toggle and custom Persian typography.
+- **Services & Smile Gallery**: Dynamic treatment catalog with pricing estimates and an interactive before/after gallery.
+- **Jalali Online Booking**: Custom Persian calendar picker with configurable morning/afternoon shift capacities and booking tracking by ID.
+- **Blog & SEO**: Article reader with clean URLs, `sitemap.xml`, `robots.txt`, and Schema.org JSON-LD structured data.
+- **Online Consultation Widget**: Built-in clinic Q&A chat widget for common treatment, pricing, installment, and location inquiries.
+
+### Patient Portal
+- **Email OTP Authentication**: Passwordless login flow via one-time verification codes sent over SMTP.
+- **Medical & Dental Records**: Read-only access to personal treatment plans, dental status, and prescriptions.
+- **Direct Clinic Messaging**: Asynchronous chat thread between the patient and clinic staff.
+- **Review Submission**: Verified patients can submit treatment reviews for moderation.
+
+### Admin Dashboard
+- **Appointments & Shift Control**: Approve, reschedule, comment on, or cancel bookings and adjust daily shift capacities.
+- **Patient Records & Odontogram**: Manage patient profiles, interactive 32-tooth dental charts, prescriptions, and direct messages.
+- **Financial Ledger**: Track clinic income, material/operational expenses, and patient payment history.
+- **Dual-Mode Article Editor**: Rich-text HTML editor (`react-quill-new`) alongside a block-based editor, complete with live preview and draft autosave.
+- **Clinic CMS & Analytics**: Edit services, gallery items, contact details, patient reviews, and view booking/revenue charts (`Recharts`).
+
+---
+
+## Tech Stack
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Motion, Recharts, Lucide Icons, React Quill, DOMPurify
+- **Backend**: Node.js, Express, TypeScript (`tsx` in development, `esbuild` bundle for production)
+- **Database**: MongoDB (with automatic local JSON fallback in `data/clinic-data.json` when no database URI is configured)
+- **Email**: Nodemailer (Gmail SMTP)
+
+---
+
+## Project Structure
 
 ```text
-├── api/                  # هندلرهای Serverless برای استقرار (Vercel)
-├── public/               # فایل‌های استاتیک و تصاویر
-├── server/               # مدل‌ها و تنظیمات اتصال دیتابیس
+├── api/
+│   └── index.ts            # Serverless entry point (Vercel)
+├── data/                   # Local JSON state fallback
+├── public/                 # Static assets, SVG illustrations, uploads
 ├── src/
-│   ├── components/       # کامپوننت‌های رابط کاربری، پنل ادمین و پرتال بیمار
-│   ├── data.ts           # داده‌های اولیه و ساختار تایپ‌ها
-│   ├── App.tsx           # کامپوننت اصلی و مدیریت وضعیت‌ها
-│   └── index.css         # استایل‌های سراسری و Tailwind
-├── server.ts             # سرور اصلی Express و روت‌های API
-├── vercel.json           # تنظیمات Rewrite برای Vercel
+│   ├── components/         # UI sections, Admin tabs, Patient portal, RichTextEditor
+│   ├── lib/                # Client utilities & toast notifications
+│   ├── App.tsx             # Main application & routing state
+│   ├── data.ts             # Initial clinic seed data & types
+│   ├── index.css           # Tailwind setup & custom editor/theme styles
+│   └── main.tsx            # React entry point
+├── server.ts               # Express API server & Vite middleware
+├── index.html              # HTML shell & Schema.org metadata
+├── vercel.json             # Vercel routing config
+├── netlify.toml            # Netlify build config
 └── package.json
 ```
 
 ---
 
-## راه‌اندازی و اجرا روی سیستم شخصی
+## Getting Started
 
-### ۱. پیش‌نیازها
-- **Node.js** (نسخه ۱۸ به بالا پیشنهاد می‌شود)
-- یک دیتابیس **MongoDB** (اختیاری — در صورت خالی بودن مقدار دیتابیس، برنامه به‌صورت خودکار با حافظه موقت بالا می‌آید تا تست و توسعه بدون وقفه انجام شود)
+### Prerequisites
+- **Node.js** v18 or higher
+- **npm**
+- Optional: a **MongoDB** instance (Atlas or local) and a **Gmail** account with an App Password for OTP emails
 
-### ۲. نصب پکیج‌ها
+### Installation
 
-```bash
-npm install
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Reza-Mokhtari-Hub/dentflow.git
+   cd dentflow
+   ```
 
-### ۳. تنظیم متغیرهای محیطی (Environment Variables)
-یک فایل `.env` در ریشه پروژه بسازید (می‌توانید از `.env.example` کپی بگیرید) و مقادیر خودتان را وارد کنید:
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-```env
-MONGODB_URI=your_mongodb_connection_string
-GMAIL_USER=your_email@gmail.com
-GMAIL_PASS=your_gmail_app_password
-GEMINI_API_KEY=your_api_key
-```
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env
+   ```
 
-> **نکته:** برای ارسال ایمیل نوبت‌ها از طریق جیمیل، بهتر است از **App Password** در تنظیمات امنیتی اکانت گوگل استفاده کنید.
+   Configure `.env` as needed:
 
-### ۴. اجرای پروژه در محیط توسعه
+   | Variable | Required | Description |
+   | :--- | :--- | :--- |
+   | `MONGODB_URI` | No | MongoDB connection string. If omitted, data is stored locally in `data/clinic-data.json`. |
+   | `GMAIL_USER` | No | Gmail address used by Nodemailer to send patient OTP codes and notifications. |
+   | `GMAIL_PASS` | No | Gmail App Password corresponding to `GMAIL_USER`. |
+   | `GEMINI_API_KEY` | No | Optional API key for automated consultation responses and article draft helpers. |
 
-```bash
-npm run dev
-```
-
-سرور Express و Vite به‌صورت هم‌زمان روی پورت `3000` بالا می‌آیند:
-`http://localhost:3000`
-
-### ۵. بیلد و اجرای نسخه نهایی (Production)
-
-```bash
-# بررسی خطاهای تایپ‌اسکریپت
-npm run lint
-
-# ساخت خروجی کلاینت و باندل سرور
-npm run build
-
-# اجرای نسخه بیلد شده
-npm start
-```
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
+   The app and API will be available at `http://localhost:3000`.
 
 ---
 
-## نویسنده و توسعه‌دهنده
+## Scripts
 
-طراحی و توسعه توسط **رضا مختاری (Reza Mokhtari)**
+- `npm run dev` — Starts Express with Vite middleware on port `3000`
+- `npm run build` — Builds the client into `dist/` and bundles `server.ts` into `dist/server.cjs`
+- `npm start` — Runs the compiled production server (`node dist/server.cjs`)
+- `npm run lint` — Runs TypeScript type checking (`tsc --noEmit`)
 
-- گیت‌هاب: [github.com/Reza-Mokhtari-Hub](https://github.com/Reza-Mokhtari-Hub)
+---
+
+## Deployment
+
+### Node.js Server
+```bash
+npm run build
+npm start
+```
+
+### Vercel
+This repository includes `vercel.json` and `api/index.ts`. Push the project to GitHub under your account, import it in Vercel, add your environment variables in project settings, and deploy.
+
+---
+
+## Author
+
+**Reza Mokhtari**  
+GitHub: [@Reza-Mokhtari-Hub](https://github.com/Reza-Mokhtari-Hub)
+
+## License
+
+This project is licensed under the Apache-2.0 License.
