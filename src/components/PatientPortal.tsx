@@ -125,62 +125,47 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
     e.preventDefault();
     setLoading(true);
     setError("");
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("لطفاً یک نشانی ایمیل معتبر وارد فرمایید.");
-      setLoading(false);
-      return;
-    }
-
     try {
       const res = await fetch("/api/patient/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail })
+        body: JSON.stringify({ email })
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || "کد تایید یکبار مصرف به نشانی ایمیل شما ارسال شد.");
         setStep("otp");
-        setLoading(false);
-        return;
       } else {
         setError(data.error || "خطا در ارسال کد تایید.");
       }
     } catch (err) {
-      console.warn("Server request OTP failed:", err);
-      setError("خطا در برقراری ارتباط با سرور. لطفاً دوباره تلاش کنید.");
+      setError("خطا در برقراری ارتباط با سرور.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const cleanEmail = email.trim().toLowerCase();
-
     try {
       const res = await fetch("/api/patient/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, code: otp.trim() })
+        body: JSON.stringify({ email, code: otp })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setPatientData(data.patient);
         setStep("dashboard");
-        setLoading(false);
-        return;
       } else {
-        setError(data.error || "کد تایید اشتباه است یا منقضی شده است.");
+        setError(data.error || "کد تایید اشتباه است.");
       }
     } catch (err) {
-      console.warn("Server verify OTP failed:", err);
-      setError("خطا در برقراری ارتباط با سرور.");
+      setError("خطا در تایید کد.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleLogout = () => {
@@ -236,12 +221,12 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                     <User className="w-8 h-8" />
                   </div>
                   <h1 className="text-2xl font-black text-slate-800 mb-2">ورود به پورتال بیماران</h1>
-                  <p className="text-slate-500 text-sm font-medium">جهت مشاهده پرونده دیجیتال، نشانی ایمیل خود را وارد کنید</p>
+                  <p className="text-slate-500 text-sm font-medium">جهت مشاهده پرونده، برای خود ایمیل وارد کنید</p>
                 </div>
 
                 <form onSubmit={handleRequestOtp} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-slate-700 font-bold text-xs pr-1">نشانی ایمیل بیمار:</label>
+                    <label className="text-slate-700 font-bold text-xs pr-1">نشانی ایمیل:</label>
                     <div className="relative">
                       <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                       <input 
@@ -250,7 +235,7 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="yourname@example.com"
-                        className="w-full pl-4 pr-12 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-slate-50 font-mono text-left transition-all text-sm"
+                        className="w-full pl-4 pr-12 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-slate-50 font-mono text-left transition-all"
                         dir="ltr"
                       />
                     </div>
@@ -270,14 +255,14 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                     disabled={loading}
                     className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-teal-600/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    {loading ? "در حال ارسال کد..." : "ارسال کد تایید یکبار مصرف"}
+                    {loading ? "در حال بررسی..." : "ارسال کد تایید"}
                   </button>
                 </form>
 
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3 bg-slate-50/50 p-4 rounded-2xl">
+                <div className="mt-8 pt-6 border-t border-slate-100 flex items-start gap-3 bg-slate-50/50 p-4 rounded-2xl">
                   <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0" />
                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    امنیت اطلاعات شما اولویت ماست. کد ورود یکبار مصرف به نشانی ایمیل شما ارسال می‌شود.
+                    امنیت اطلاعات شما اولویت ماست. دسترسی به پرونده فقط از طریق ایمیل ثبت شده در سیستم کلینیک دنت فلو امکان‌پذیر است.
                   </p>
                 </div>
               </div>
@@ -306,12 +291,12 @@ export default function PatientPortal({ onBack, clinicConfig }: PatientPortalPro
                     <ShieldCheck className="w-8 h-8" />
                   </div>
                   <h1 className="text-2xl font-black text-slate-800 mb-2">تایید هویت</h1>
-                  <p className="text-slate-500 text-sm font-medium">کد ۶ رقمی ارسال شده به <span className="text-teal-600 font-mono font-bold" dir="ltr">{email}</span> را وارد کنید</p>
+                  <p className="text-slate-500 text-sm font-medium">کد ۶ رقمی ارسال شده به ایمیل <span className="text-teal-600 font-mono" dir="ltr">{email}</span> را وارد کنید</p>
                 </div>
 
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-slate-700 font-bold text-xs pr-1">کد تایید ۶ رقمی:</label>
+                    <label className="text-slate-700 font-bold text-xs pr-1">کد تایید:</label>
                     <input 
                       type="text"
                       required

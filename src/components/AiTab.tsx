@@ -94,9 +94,9 @@ export default function AiTab({
 
           <button
             onClick={() => {
-              localStorage.setItem("df_ai_name", aiName);
-              localStorage.setItem("df_ai_greeting", aiGreeting);
-              localStorage.setItem("df_ai_prompt", aiPrompt);
+              
+              
+              
               toast.success("پیکربندی هوش مصنوعی با موفقیت بروزرسانی شد. ربات از این لحظه با پرومپت جدید بیمارها را راهنمایی خواهد کرد.");
             }}
             className="px-8 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-teal-600/15 cursor-pointer border-none"

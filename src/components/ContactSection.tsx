@@ -58,7 +58,7 @@ export default function ContactSection({ clinicConfig }: ContactSectionProps) {
     <section id="contact-page-block" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full text-right space-y-12 animate-fade-in">
       <div className="text-center max-w-3xl mx-auto space-y-4">
         <span className="inline-block px-3 py-1 rounded-full bg-teal-50 text-teal-600 text-xs font-bold border border-teal-100">ارتباط با کلینیک دنت فلو</span>
-        <h2 className="text-3xl font-extrabold text-slate-900">اطلاعات تماس و موقعیت جغرافیایی</h2>
+        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">اطلاعات تماس و موقعیت جغرافیایی</h2>
         <p className="text-slate-500 text-sm sm:text-base leading-relaxed font-semibold">
           برای مشاوره، هماهنگی و یا ارسال نظرات خود می‌توانید از فرم زیر استفاده کنید یا با شماره‌های مستقیم کلینیک در تماس باشید.
         </p>

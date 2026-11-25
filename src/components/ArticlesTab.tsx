@@ -31,11 +31,7 @@ import {
   HelpCircle,
   CheckCircle,
   Bookmark,
-  ChevronLeft,
-  MessageSquare,
-  Reply,
-  User,
-  Heart
+  ChevronLeft
 } from "lucide-react";
 
 interface BlogPost {
@@ -47,7 +43,6 @@ interface BlogPost {
   readTime: string;
   imageUrl: string;
   content?: string;
-  likes?: number;
 }
 
 interface ArticlesTabProps {
@@ -108,7 +103,7 @@ export function renderMarkdown(contentStr: string) {
   if (isHtml) {
     return (
       <div 
-        className="prose prose-slate max-w-none w-full overflow-hidden text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base rtl-html-content"
+        className="prose prose-slate max-w-none text-right font-medium text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base rtl-html-content"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentStr) }}
         style={{ direction: "rtl", textAlign: "right" }}
       />
@@ -133,6 +128,7 @@ export function renderMarkdown(contentStr: string) {
           ))}
         </ul>
       );
+
     } else {
       elements.push(
         <ol key={`list-${key}`} className="mr-5 my-3.5 space-y-1.5 text-slate-700 leading-relaxed text-xs sm:text-sm text-right list-decimal" style={{ direction: "rtl" }}>
@@ -143,6 +139,7 @@ export function renderMarkdown(contentStr: string) {
           ))}
         </ol>
       );
+
     }
     currentList = null;
   };
@@ -194,6 +191,7 @@ export function renderMarkdown(contentStr: string) {
           <div className="flex-1">{parseInlineMarkdown(text)}</div>
         </div>
       );
+
       continue;
     }
 
@@ -206,6 +204,7 @@ export function renderMarkdown(contentStr: string) {
           <div className="flex-1">{parseInlineMarkdown(text)}</div>
         </div>
       );
+
       continue;
     }
 
@@ -218,6 +217,7 @@ export function renderMarkdown(contentStr: string) {
           <div className="flex-1">{parseInlineMarkdown(text)}</div>
         </div>
       );
+
       continue;
     }
 
@@ -255,24 +255,28 @@ export function renderMarkdown(contentStr: string) {
           {parseInlineMarkdown(line.substring(2))}
         </h2>
       );
+
     } else if (line.startsWith("## ")) {
       elements.push(
         <h3 key={i} className="text-lg sm:text-xl font-black text-slate-900 mt-5 mb-2.5 border-r-4 border-teal-500 pr-2.5 pb-1">
           {parseInlineMarkdown(line.substring(3))}
         </h3>
       );
+
     } else if (line.startsWith("### ")) {
       elements.push(
         <h4 key={i} className="text-base sm:text-lg font-black text-slate-800 mt-4 mb-2 border-r-2 border-slate-300 pr-2">
           {parseInlineMarkdown(line.substring(4))}
         </h4>
       );
+
     } else if (line.startsWith("> ")) {
       elements.push(
         <blockquote key={i} className="bg-slate-50 border-r-4 border-slate-300 text-slate-600 italic px-4 py-3 rounded-l-2xl my-4 text-xs sm:text-sm font-bold leading-relaxed">
           {parseInlineMarkdown(line.substring(2))}
         </blockquote>
       );
+
     } else if (line.startsWith("---")) {
       elements.push(<hr key={i} className="border-t border-slate-100 my-5" />);
     } else {
@@ -280,7 +284,9 @@ export function renderMarkdown(contentStr: string) {
         <p key={i} className="text-slate-600 text-xs sm:text-sm leading-relaxed mb-3.5 text-right font-medium">
           {parseInlineMarkdown(line)}
         </p>
+
       );
+
     }
   }
 
@@ -389,21 +395,6 @@ const articleTemplates = [
 ];
 
 export default function ArticlesTab({ articles, setArticles, useLocalDb, adminToken }: ArticlesTabProps) {
-  const [subActiveTab, setSubActiveTab] = useState<"articles" | "comments">("articles");
-  const [comments, setComments] = useState<Record<number, any[]>>({});
-  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({}); // key is "postId-commentIndex"
-
-  React.useEffect(() => {
-    try {
-      const storedComments = localStorage.getItem("dentflow_blog_comments");
-      if (storedComments) {
-        setComments(JSON.parse(storedComments));
-      }
-    } catch (e) {
-      console.error("Could not load comments inside ArticlesTab", e);
-    }
-  }, [subActiveTab]);
-
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("همه");
   const [isEditing, setIsEditing] = useState(false);
@@ -499,7 +490,6 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formContent, setFormContent] = useState("");
-  const [formLikes, setFormLikes] = useState<number>(0);
 
 
   const showStatus = (type: "success" | "error", text: string) => {
@@ -518,7 +508,6 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     setFormImageUrl("https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=600&auto=format&fit=crop");
     setFormDate(new Date().toLocaleDateString("fa-IR"));
     setFormContent("");
-    setFormLikes(0);
     setFormActiveTab("general");
     setIsEditing(true);
   };
@@ -532,7 +521,6 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     setFormImageUrl(article.imageUrl);
     setFormDate(article.date);
     setFormContent(article.content || "");
-    setFormLikes(article.likes !== undefined ? article.likes : (article.id * 7 + 18));
     setFormActiveTab("general");
     setIsEditing(true);
     // Smooth scroll to top of form
@@ -568,12 +556,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
       });
 
       if (!response.ok) {
-        let errMessage = "خطا در پاسخ سرور";
-        try {
-          const errData = await response.json();
-          if (errData && errData.error) errMessage = errData.error;
-        } catch(e) {}
-        throw new Error(errMessage);
+        throw new Error("خطا در پاسخ سرور");
       }
 
       const data = await response.json();
@@ -593,9 +576,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
       setFormActiveTab("content"); // Auto switch to editor tab to let them see the content!
       setTopicPrompt("");
       showStatus("success", "مقاله کامل به همراه متن اختصاصی تولید و در ادیتور بارگذاری شد! لطفا آن را مرور و ذخیره کنید.");
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
-      showStatus("error", error?.message || "خطا در برقراری ارتباط با هوش مصنوعی جمینای. لطفاً اتصال شبکه را بررسی کنید.");
+      showStatus("error", "خطا در برقراری ارتباط با هوش مصنوعی جمینای. لطفاً اتصال شبکه را بررسی کنید.");
     } finally {
       setIsGenerating(false);
     }
@@ -623,22 +606,21 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
       readTime: formReadTime,
       imageUrl: formImageUrl || "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=600&auto=format&fit=crop",
       date: formDate || new Date().toLocaleDateString("fa-IR"),
-      content: formContent,
-      likes: formLikes
+      content: formContent
     };
 
     if (useLocalDb) {
       if (editingArticle && editingArticle.id) {
         const updated = articles.map(p => p.id === editingArticle.id ? { ...p, ...payload } : p);
         setArticles(updated);
-        localStorage.setItem("df_local_articles", JSON.stringify(updated));
+
         showStatus("success", "مقاله با موفقیت ویرایش شد (محلی).");
       } else {
         const newId = articles.length > 0 ? Math.max(...articles.map(p => p.id)) + 1 : 1;
         const newPost = { id: newId, ...payload } as BlogPost;
         const updated = [newPost, ...articles];
         setArticles(updated);
-        localStorage.setItem("df_local_articles", JSON.stringify(updated));
+
         showStatus("success", "مقاله جدید با موفقیت اضافه شد (محلی).");
       }
       setIsEditing(false);
@@ -689,7 +671,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     if (useLocalDb) {
       const updated = articles.filter(p => p.id !== id);
       setArticles(updated);
-      localStorage.setItem("df_local_articles", JSON.stringify(updated));
+
       showStatus("success", "مقاله با موفقیت حذف شد (محلی).");
       return;
     }
@@ -708,63 +690,6 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
     } catch (err) {
       console.error(err);
       showStatus("error", "خطا در حذف مقاله از دیتابیس اصلی کلینیک.");
-    }
-  };
-
-  const handleSaveReply = (postId: number, commentIndex: number) => {
-    const replyKey = `${postId}-${commentIndex}`;
-    const text = replyTexts[replyKey]?.trim();
-    if (!text) {
-      showStatus("error", "متن پاسخ نمی‌تواند خالی باشد.");
-      return;
-    }
-
-    try {
-      const updatedComments = { ...comments };
-      if (updatedComments[postId] && updatedComments[postId][commentIndex]) {
-        updatedComments[postId][commentIndex] = {
-          ...updatedComments[postId][commentIndex],
-          reply: text,
-          replyDate: new Date().toLocaleDateString("fa-IR")
-        };
-        setComments(updatedComments);
-        localStorage.setItem("dentflow_blog_comments", JSON.stringify(updatedComments));
-        showStatus("success", "پاسخ پزشک با موفقیت ثبت شد و به بیمار نمایش داده می‌شود.");
-        
-        // Clear reply text input
-        setReplyTexts(prev => {
-          const next = { ...prev };
-          delete next[replyKey];
-          return next;
-        });
-      }
-    } catch (e) {
-      console.error("Error saving comment reply", e);
-      showStatus("error", "خطا در ثبت پاسخ.");
-    }
-  };
-
-  const handleDeleteComment = (postId: number, commentIndex: number) => {
-    if (!window.confirm("آیا از حذف این دیدگاه/پرسش علمی اطمینان دارید؟ این عمل غیرقابل بازگشت است.")) {
-      return;
-    }
-
-    try {
-      const updatedComments = { ...comments };
-      if (updatedComments[postId]) {
-        updatedComments[postId] = updatedComments[postId].filter((_, idx) => idx !== commentIndex);
-        
-        if (updatedComments[postId].length === 0) {
-          delete updatedComments[postId];
-        }
-        
-        setComments(updatedComments);
-        localStorage.setItem("dentflow_blog_comments", JSON.stringify(updatedComments));
-        showStatus("success", "پرسش مورد نظر با موفقیت حذف شد.");
-      }
-    } catch (e) {
-      console.error("Error deleting comment", e);
-      showStatus("error", "خطا در حذف دیدگاه.");
     }
   };
 
@@ -794,25 +719,32 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
             <span>مدیریت و سردبیری مجله علمی دنت فلو</span>
             <BookOpen className="w-5.5 h-5.5 text-teal-600" />
           </h3>
+
           <p className="text-xs text-slate-400 font-bold leading-relaxed">
             مقالات علمی کلینیک فرشته را تالیف و منتشر کنید. متن مقالات را با استفاده از ادیتور فرمت‌بندی کنید یا از پیش‌نویس‌های آماده و ژنراتور هوشمند جمینای بهره ببرید.
           </p>
+
         </div>
+
 
         {/* Mini stats badges */}
         <div className="flex flex-wrap items-center gap-2 justify-end" id="articles-quick-stats">
           <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] font-bold text-slate-500">
             کل مقالات: <span className="font-extrabold text-slate-800 mr-1">{totalArticles}</span>
           </div>
+
           <div className="px-3.5 py-1.5 bg-teal-50 border border-teal-100/50 rounded-2xl text-[11px] font-bold text-teal-600">
             ایمپلنت: <span className="font-extrabold mr-1">{implantCount}</span>
           </div>
+
           <div className="px-3.5 py-1.5 bg-indigo-50 border border-indigo-100/50 rounded-2xl text-[11px] font-bold text-indigo-600">
             زیبایی دندان: <span className="font-extrabold mr-1">{beautyCount}</span>
           </div>
+
           <div className="px-3.5 py-1.5 bg-amber-50 border border-amber-100/50 rounded-2xl text-[11px] font-bold text-amber-600">
             سلامت و بهداشت: <span className="font-extrabold mr-1">{healthCount}</span>
           </div>
+
           
           <button
             onClick={openCreateForm}
@@ -823,32 +755,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
             <span>نگارش مقاله جدید</span>
           </button>
         </div>
-      </div>
 
-      {/* Sub-tab selection bar */}
-      <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full sm:w-fit gap-1 mr-auto flex-row-reverse" id="articles-subtabs-toggle">
-        <button
-          onClick={() => setSubActiveTab("articles")}
-          className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 justify-center ${
-            subActiveTab === "articles"
-              ? "bg-white text-teal-600 shadow-sm border border-slate-200/50"
-              : "text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>نگارش و مدیریت مقالات علمی</span>
-        </button>
-        <button
-          onClick={() => setSubActiveTab("comments")}
-          className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 justify-center ${
-            subActiveTab === "comments"
-              ? "bg-white text-teal-600 shadow-sm border border-slate-200/50"
-              : "text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>پاسخ به سوالات بیماران زیر مقالات</span>
-        </button>
       </div>
 
       {/* Dynamic Status Messages */}
@@ -870,19 +777,20 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
         )}
       </AnimatePresence>
 
-      {subActiveTab === "articles" ? (
-        <>
-          {/* Advanced AI Generator Dashboard */}
-          <div className="bg-gradient-to-r from-teal-500/5 to-indigo-500/5 border border-teal-100/60 rounded-[32px] p-6 space-y-5" id="ai-article-generator">
+      {/* Advanced AI Generator Dashboard */}
+      <div className="bg-gradient-to-r from-teal-500/5 to-indigo-500/5 border border-teal-100/60 rounded-[32px] p-6 space-y-5" id="ai-article-generator">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2 justify-end self-end sm:self-auto">
             <span className="text-slate-800 font-black text-sm">مولد و نویسنده هوشمند مقاله با هوش مصنوعی جمینای (Gemini)</span>
             <div className="p-1.5 bg-teal-600/10 text-teal-700 rounded-xl">
               <Sparkles className="w-4 h-4" />
             </div>
+
           </div>
+
           <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full font-black">طراحی محتوای متنی غنی به زبان فارسی</span>
         </div>
+
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
@@ -897,6 +805,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
               />
             </div>
 
+
             {/* Category Select */}
             <div className="md:col-span-4">
               <select
@@ -909,7 +818,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                 ))}
               </select>
             </div>
+
           </div>
+
 
           {/* Expanded AI Parameters */}
           <div className="flex flex-wrap items-center justify-between gap-4 pt-1 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
@@ -946,7 +857,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                     ساده و عامه‌فهم
                   </button>
                 </div>
+
               </div>
+
 
               {/* Expected Length */}
               <div className="flex items-center gap-2">
@@ -980,8 +893,11 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                     جامع (تخصصی)
                   </button>
                 </div>
+
               </div>
+
             </div>
+
 
             <button
               onClick={handleGenerateWithAI}
@@ -1001,7 +917,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
               )}
             </button>
           </div>
+
         </div>
+
       </div>
 
       {/* Editor Form Panel (Visual rich control system) */}
@@ -1025,15 +943,19 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                 </button>
               </div>
 
+
               {/* Title & Category Badge */}
               <div className="space-y-1">
                 <h4 className="text-sm font-black text-slate-800">
                   {editingArticle ? `در حال ویرایش مقاله علمی: ${editingArticle.title}` : "تالیف و ایجاد مقاله علمی جدید"}
                 </h4>
+
                 <p className="text-[10px] text-slate-400 font-bold">
                   فرم را پر کرده و از ویرایشگر مجهز Markdown در تب دوم استفاده کنید.
                 </p>
+
               </div>
+
 
               {/* Form Navigation Tabs */}
               <div className="flex border-b border-slate-100 gap-4 justify-start overflow-x-auto pb-1" id="form-tabs-navigation">
@@ -1094,6 +1016,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                 </button>
               </div>
 
+
               {/* Tab Contents */}
               <div className="pt-2">
                 {/* TAB 1: General Information */}
@@ -1115,6 +1038,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       />
                     </div>
 
+
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-extrabold text-slate-500 block">دسته‌بندی موضوعی <span className="text-rose-500">*</span></label>
                       <select
@@ -1128,6 +1052,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       </select>
                     </div>
 
+
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-extrabold text-slate-500 block">مدت زمان تقریبی مطالعه</label>
                       <input
@@ -1138,6 +1063,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl text-xs font-bold text-slate-800 outline-none text-right"
                       />
                     </div>
+
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-extrabold text-slate-500 block">تاریخ انتشار</label>
@@ -1150,23 +1076,13 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-extrabold text-slate-500 block">تعداد پسندها (لایک‌ها)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={formLikes}
-                        onChange={(e) => setFormLikes(Math.max(0, parseInt(e.target.value) || 0))}
-                        placeholder="مثال: ۴۲"
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl text-xs font-bold text-slate-800 outline-none text-right"
-                      />
-                    </div>
 
                     <div className="md:col-span-2 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] text-slate-400 font-bold">باقی‌مانده: {Math.max(0, 160 - formExcerpt.length)} کاراکتر</span>
                         <label className="text-[11px] font-extrabold text-slate-500 block">خلاصه کوتاه مقاله (جهت نمایش در شبکه‌های اجتماعی و کارت‌ها) <span className="text-rose-500">*</span></label>
                       </div>
+
                       <textarea
                         required
                         maxLength={200}
@@ -1178,6 +1094,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       />
                     </div>
 
+
                     <div className="md:col-span-2 flex justify-end">
                       <button
                         type="button"
@@ -1188,6 +1105,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
                   </motion.div>
                 )}
 
@@ -1217,18 +1135,22 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                             </button>
                           ))}
                         </div>
+
                       </div>
+
                     </div>
+
 
                     <div className="flex flex-col space-y-4" id="editor-main-canvas">
                       {/* Rich Editor + Preview */}
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[1500px] min-h-0">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[550px]">
                         {/* Editor side */}
-                        <div className="flex flex-col h-full space-y-1 relative min-h-0">
-                          <div className="flex justify-between items-center px-1 shrink-0">
+                        <div className="flex flex-col h-full space-y-1 relative">
+                          <div className="flex justify-between items-center px-1">
                             <span className="text-[10px] text-slate-400 font-bold">از نوار ابزار بالا برای فرمت‌بندی استفاده کنید. جادوی هوش مصنوعی نیز در دسترس است.</span>
                             <span className="text-[10px] font-black text-teal-600">پنل ویرایشگر حرفه‌ای</span>
                           </div>
+
                           <RichTextEditor 
                             value={formContent} 
                             onChange={setFormContent}
@@ -1238,18 +1160,24 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                           />
                         </div>
 
+
                         {/* Live Rendered Side */}
-                        <div className="flex flex-col h-full space-y-1 min-h-0">
-                          <div className="flex justify-between items-center px-1 shrink-0">
+                        <div className="flex flex-col h-full space-y-1">
+                          <div className="flex justify-between items-center px-1">
                             <span className="text-[10px] font-black text-indigo-600">پیش‌نمایش زنده و رندر شده</span>
                             <span className="text-[10px] text-slate-400 font-bold">نمایش استایل نهایی مقاله در وب‌سایت</span>
                           </div>
-                          <div className="w-full flex-1 p-5 bg-slate-50/30 border border-slate-100 rounded-2xl overflow-y-auto text-right font-sans select-none prose prose-slate min-h-0">
+
+                          <div className="w-full flex-1 p-5 bg-slate-50/30 border border-slate-100 rounded-2xl overflow-y-auto text-right font-sans select-none prose prose-slate">
                             {renderMarkdown(formContent)}
                           </div>
+
                         </div>
+
                       </div>
+
                     </div>
+
 
                     <div className="flex justify-between items-center border-t border-slate-100 pt-3">
                       <button
@@ -1269,6 +1197,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
                   </motion.div>
                 )}
 
@@ -1286,6 +1215,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                           <span className="text-[9px] text-slate-400 font-bold">آدرس مستقیم تصویر وب از Unsplash یا منابع معتبر</span>
                           <label className="text-[11px] font-extrabold text-slate-500 block">لینک آدرس تصویر شاخص (URL)</label>
                         </div>
+
                         <div className="flex gap-2">
                           <input
                             type="url"
@@ -1304,7 +1234,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                             </button>
                           )}
                         </div>
+
                       </div>
+
 
                       {/* Drag and Drop Uploader Widget */}
                       <div className="space-y-1.5">
@@ -1312,6 +1244,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                           <span className="text-[9px] text-slate-400 font-bold">فایل تصویر را بکشید و رها کنید یا انتخاب کنید</span>
                           <label className="text-[11px] font-extrabold text-slate-500 block">یا بارگذاری فایل تصویر جدید از رایانه</label>
                         </div>
+
                         
                         <div
                           onDragEnter={(e) => {
@@ -1360,16 +1293,21 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                               <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto" />
                               <p className="text-[11px] font-bold text-teal-600">در حال بارگذاری فایل تصویر روی سرور کلینیک دنت فلو...</p>
                             </div>
+
                           ) : (
                             <div className="space-y-1 py-1">
                               <Upload className="w-6 h-6 text-slate-400 mx-auto" />
                               <p className="text-[11px] font-bold text-slate-700">کلیک کنید یا فایل تصویر را به داخل این کادر بکشید</p>
                               <p className="text-[9px] text-slate-400 font-medium">حجم مجاز تا ۵ مگابایت (PNG, JPG, WebP)</p>
                             </div>
+
                           )}
                         </div>
+
                       </div>
+
                     </div>
+
 
                     {/* Stock photos gallery selector */}
                     <div className="space-y-2">
@@ -1377,6 +1315,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         <span className="text-[10px] text-slate-400 font-bold">با کلیک روی هر عکس، آدرس آن مستقیماً به عنوان عکس مقاله ست می‌شود.</span>
                         <span className="text-[11px] font-black text-slate-700">عکس‌های کلینیکال دندانپزشکی دنت فلو (Unsplash)</span>
                       </div>
+
                       
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                         {unsplashStockPhotos.map((photo, index) => (
@@ -1403,17 +1342,23 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                                 <p className="text-[9px] font-black text-white">{photo.title}</p>
                                 <p className="text-[7px] text-slate-300 font-bold leading-none line-clamp-1">{photo.desc}</p>
                               </div>
+
                             </div>
+
 
                             {formImageUrl === photo.url && (
                               <div className="absolute top-1.5 right-1.5 bg-teal-500 text-white p-1 rounded-lg">
                                 <Check className="w-3 h-3" />
                               </div>
+
                             )}
                           </div>
+
                         ))}
                       </div>
+
                     </div>
+
 
                     {/* Banner Image Preview Container */}
                     <div className="bg-slate-50 border border-slate-100 rounded-3xl p-4 flex flex-col md:flex-row gap-4 items-center">
@@ -1430,6 +1375,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                             <ImageIcon className="w-8 h-8 mx-auto text-slate-300" />
                             <p>پیش‌نمایش تصویر</p>
                           </div>
+
                         )}
                         {formImageUrl && (
                           <span className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-[8px] text-white font-bold px-2 py-0.5 rounded-md">
@@ -1438,14 +1384,18 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         )}
                       </div>
 
+
                       <div className="space-y-1.5 flex-1 text-right">
                         <span className="text-[9px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-bold">پیش‌نمایش زنده بنر</span>
                         <h5 className="text-xs font-black text-slate-800">کاور مقاله وبلاگ</h5>
                         <p className="text-[10px] text-slate-400 font-bold leading-relaxed">
                           تصویر شاخص در بالای صفحه مقاله و روی کارت‌ها در بخش وبلاگ کلینیک دنت فلو نمایش داده خواهد شد. کیفیت پیشنهادی تصاویر لنداسکیپ با نسبت ۱۶:۹ می‌باشد.
                         </p>
+
                       </div>
+
                     </div>
+
 
                     <div className="flex justify-between items-center border-t border-slate-100 pt-3">
                       <button
@@ -1465,6 +1415,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
                   </motion.div>
                 )}
 
@@ -1479,9 +1430,10 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       <p className="text-[11px] text-slate-400 font-bold">کارت وبلاگ نهایی مراجعین به شکل زیر در پورتال اصلی رندر و نمایش داده می‌شود:</p>
                     </div>
 
+
                     {/* Centered card mockup */}
                     <div className="flex justify-center py-4 bg-slate-100/50 rounded-3xl">
-                      <div className="bg-white border border-slate-100 rounded-[28px] overflow-hidden shadow-xl shadow-slate-950/5 flex flex-col justify-between w-80 text-right" style={{ wordBreak: "keep-all" }}>
+                      <div className="bg-white border border-slate-100 rounded-[28px] overflow-hidden shadow-xl shadow-slate-950/5 flex flex-col justify-between w-80 text-right">
                         <div>
                           {/* Banner image */}
                           <div className="aspect-video w-full overflow-hidden relative bg-slate-100">
@@ -1496,11 +1448,13 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                               <div className="w-full h-full flex items-center justify-center text-slate-300">
                                 <ImageIcon className="w-10 h-10" />
                               </div>
+
                             )}
                             <span className="absolute top-3 right-3 bg-white/95 text-slate-700 text-[10px] font-black px-2.5 py-1 rounded-lg shadow-sm">
                               {formCategory}
                             </span>
                           </div>
+
 
                           {/* Content */}
                           <div className="p-5 text-right space-y-2.5">
@@ -1515,14 +1469,19 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                               </span>
                             </div>
 
+
                             <h3 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-2">
                               {formTitle || "عنوان مقاله را در زبانه اول مشخص کنید"}
                             </h3>
+
                             <p className="text-slate-400 text-[10px] leading-relaxed line-clamp-3 font-semibold">
                               {formExcerpt || "خلاصه مقاله در اینجا رندر می‌شود..."}
                             </p>
+
                           </div>
+
                         </div>
+
 
                         <div className="px-5 pb-5 text-right">
                           <span className="text-teal-600 font-black text-[10px] flex items-center gap-1">
@@ -1530,8 +1489,11 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                             <ChevronLeft className="w-3 h-3" />
                           </span>
                         </div>
+
                       </div>
+
                     </div>
+
 
                     <div className="flex justify-between items-center border-t border-slate-100 pt-3">
                       <button
@@ -1542,9 +1504,11 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                         بازگشت به تصاویر شاخص
                       </button>
                     </div>
+
                   </motion.div>
                 )}
               </div>
+
 
               {/* Form Footer Action buttons */}
               <div className="flex items-center gap-3 justify-start border-t border-slate-100 pt-5">
@@ -1568,6 +1532,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                   <span>ثبت و انتشار نهایی مقاله</span>
                 </button>
               </div>
+
             </form>
           </motion.div>
         )}
@@ -1596,6 +1561,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
             ))}
           </div>
 
+
           <div className="w-full lg:w-72 relative shrink-0">
             <input
               type="text"
@@ -1606,7 +1572,9 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
             />
             <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
           </div>
+
         </div>
+
 
         {/* Output Grid */}
         {filteredArticles.length === 0 ? (
@@ -1614,13 +1582,13 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
             <BookOpen className="w-10 h-10 mx-auto text-slate-300" />
             <p>هیچ مقاله علمی منطبق با جستجو در دسته‌بندی "{selectedCategoryTab}" یافت نشد.</p>
           </div>
+
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="admin-articles-grid">
             {filteredArticles.map((article) => (
               <div 
                 key={article.id}
                 className="border border-slate-100 rounded-2xl p-4 flex flex-col justify-between gap-4 hover:border-teal-100 hover:shadow-md hover:shadow-teal-900/5 transition-all bg-white"
-                style={{ wordBreak: "keep-all" }}
               >
                 <div className="flex gap-4">
                   {/* Photo thumbnail */}
@@ -1632,6 +1600,7 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       referrerPolicy="no-referrer"
                     />
                   </div>
+
                   
                   {/* Metadata & titles */}
                   <div className="space-y-1 text-right min-w-0 flex-1">
@@ -1644,8 +1613,11 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                     <p className="text-[10px] text-slate-400 font-bold line-clamp-2 leading-relaxed">
                       {article.excerpt}
                     </p>
+
                   </div>
+
                 </div>
+
 
                 {/* Footer and interactive buttons */}
                 <div className="flex items-center justify-between border-t border-slate-50 pt-3">
@@ -1668,11 +1640,8 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                     </button>
                   </div>
 
+
                   <div className="flex items-center gap-3 text-[9px] text-slate-400 font-bold">
-                    <span className="flex items-center gap-1 text-rose-500 font-extrabold">
-                      <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-                      <span>{article.likes !== undefined ? article.likes : (article.id * 7 + 18)} پسند</span>
-                    </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
                       {article.readTime}
@@ -1682,147 +1651,16 @@ export default function ArticlesTab({ articles, setArticles, useLocalDb, adminTo
                       {article.date}
                     </span>
                   </div>
+
                 </div>
+
               </div>
+
             ))}
           </div>
+
         )}
       </div>
-        </>
-      ) : (
-        /* Comment & Question Answering Panel */
-        <div className="space-y-6" id="comments-moderation-panel">
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4 shadow-sm text-right">
-            <div className="border-b border-slate-100 pb-4">
-              <h4 className="text-base font-black text-slate-800 flex items-center gap-2 justify-end">
-                <span>مدیریت پرسش‌ها و نظرات علمی بیماران</span>
-                <MessageSquare className="w-5 h-5 text-teal-600" />
-              </h4>
-              <p className="text-xs text-slate-400 font-bold leading-relaxed mt-1">
-                دیدگاه‌ها، سوالات و مکاتبات ارسالی بیماران را زیر مقالات علمی کلینیک دنت فلو مشاهده کرده و مستقیماً پاسخ پزشک را ثبت کنید. پاسخ‌های شما بلافاصله زیر هر مقاله نمایش داده می‌شود.
-              </p>
-            </div>
-
-            {(() => {
-              const articlesWithComments = articles.filter(art => comments[art.id] && comments[art.id].length > 0);
-
-              if (articlesWithComments.length === 0) {
-                return (
-                  <div className="text-center py-16 text-slate-400 text-xs font-bold space-y-3 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
-                    <MessageSquare className="w-12 h-12 mx-auto text-slate-300 opacity-60" />
-                    <p className="text-sm">هیچ پرسش یا نظری تاکنون برای مقالات علمی ثبت نشده است.</p>
-                    <p className="text-[10px] text-slate-400 font-normal">بیماران با مراجعه به جزئیات هر مقاله می‌توانند سوالات خود را مطرح نمایند.</p>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-6">
-                  {articlesWithComments.map((art) => {
-                    const postComments = comments[art.id] || [];
-                    return (
-                      <div key={art.id} className="border border-slate-100 rounded-3xl p-5 bg-slate-50/30 space-y-4 hover:border-teal-100 transition-all">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100/80 pb-3">
-                          <span className="text-[10px] bg-teal-50 text-teal-700 px-3 py-1 rounded-full font-black w-fit">
-                            دسته‌بندی: {art.category}
-                          </span>
-                          <div className="text-right">
-                            <span className="text-[10px] text-slate-400 font-bold">دیدگاه‌های مقاله علمی:</span>
-                            <h5 className="text-xs font-black text-slate-800 hover:text-teal-600 transition-colors mt-0.5">
-                              « {art.title} »
-                            </h5>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          {postComments.map((comment, idx) => {
-                            const replyKey = `${art.id}-${idx}`;
-                            const isReplied = !!comment.reply;
-                            
-                            return (
-                              <div key={idx} className="p-4 bg-white border border-slate-100 rounded-2xl flex flex-col md:flex-row gap-4 justify-between text-right relative hover:shadow-sm hover:border-slate-200 transition-all">
-                                
-                                <div className="space-y-3 flex-1">
-                                  <div className="flex justify-between items-center pb-2 border-b border-slate-50">
-                                    <span className="text-[10px] text-slate-400 font-bold font-sans">{comment.date}</span>
-                                    <div className="flex items-center gap-2">
-                                      <h4 className="text-xs font-black text-slate-700">{comment.name}</h4>
-                                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                                        <User className="w-3.5 h-3.5 text-slate-500" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
-                                  <p className="text-xs text-slate-600 leading-relaxed font-semibold bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                    {comment.text}
-                                  </p>
-
-                                  {isReplied ? (
-                                    <div className="p-3 bg-teal-50/40 border border-teal-100 rounded-xl text-xs text-slate-700 font-semibold space-y-1">
-                                      <div className="flex justify-between items-center border-b border-teal-100/30 pb-1 mb-1">
-                                        <span className="text-[9px] text-slate-400 font-bold font-sans">{comment.replyDate || comment.date}</span>
-                                        <span className="font-black text-teal-600 flex items-center gap-1">
-                                          <span>پاسخ ثبت شده پزشک</span>
-                                          <Sparkles className="w-3 h-3 animate-pulse" />
-                                        </span>
-                                      </div>
-                                      <p className="leading-relaxed text-slate-600">{comment.reply}</p>
-                                    </div>
-                                  ) : (
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-black border border-amber-100">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                      <span>منتظر پاسخ پزشک کلینیک</span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="md:w-72 flex flex-col justify-between gap-3 border-t md:border-t-0 md:border-r border-slate-100 pt-3 md:pt-0 md:pr-4">
-                                  <div className="space-y-2">
-                                    <label className="text-[10px] text-slate-400 font-black block">
-                                      {isReplied ? "ویرایش و اصلاح پاسخ:" : "ثبت پاسخ مستقیم پزشک:"}
-                                    </label>
-                                    <textarea
-                                      placeholder="پاسخ علمی خود را در این بخش بنویسید..."
-                                      value={replyTexts[replyKey] !== undefined ? replyTexts[replyKey] : (comment.reply || "")}
-                                      onChange={(e) => setReplyTexts({ ...replyTexts, [replyKey]: e.target.value })}
-                                      className="w-full px-3 py-2 text-xs font-bold text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 bg-slate-50 focus:bg-white transition-all resize-none"
-                                      rows={3}
-                                    />
-                                  </div>
-
-                                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-50 mt-1">
-                                    <button
-                                      onClick={() => handleDeleteComment(art.id, idx)}
-                                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors text-[10px] font-black cursor-pointer flex items-center gap-1"
-                                      title="حذف کلی این دیدگاه"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      <span>حذف دیدگاه</span>
-                                    </button>
-
-                                    <button
-                                      onClick={() => handleSaveReply(art.id, idx)}
-                                      className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                      <Reply className="w-3.5 h-3.5" />
-                                      <span>{isReplied ? "بروزرسانی پاسخ" : "ثبت پاسخ پزشک"}</span>
-                                    </button>
-                                  </div>
-                                </div>
-
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

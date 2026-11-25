@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Shield, 
   Phone, 
@@ -52,15 +52,12 @@ import ContactSection from "./components/ContactSection";
 import AdminPanel from "./components/AdminPanel";
 import PatientPortal from "./components/PatientPortal";
 import ToastContainer from "./components/ToastContainer";
-import { toast } from "./lib/toast";
 
 export default function App() {
   // Navigation states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPatientPortalMode, setIsPatientPortalMode] = useState(false);
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    return localStorage.getItem("df_dark_theme") === "true";
-  });
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [activeSection, setActiveSection] = useState("home");
   const [isScrolled, setIsScrolled] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string>("implant");
@@ -71,197 +68,136 @@ export default function App() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
-  const [storedAdminUsername, setStoredAdminUsername] = useState(() => {
-    return localStorage.getItem("df_admin_username") || "admin";
-  });
+  const [storedAdminUsername, setStoredAdminUsername] = useState("admin");
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [loginError, setLoginError] = useState("");
   const [adminBookings, setAdminBookings] = useState<any[]>([]);
 
   // CLINIC PATIENTS DATABASE & DENTAL CHART STATES
-  const [patients, setPatients] = useState<any[]>(() => {
-    const saved = localStorage.getItem("df_patients");
-    if (saved) return JSON.parse(saved);
-    return [
-      {
-        id: "P-101",
-        fullName: "سارا احمدی",
-        phone: "09123456789",
-        nationalId: "0012345678",
-        age: 28,
-        gender: "female",
-        history: "حساسیت خفیف به پنی‌سیلین - بدون بیماری زمینه‌ای",
-        bloodType: "A+",
-        dentalChart: {
-          1: "healthy", 2: "healthy", 3: "healthy", 4: "filled", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
-          9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "decayed", 14: "healthy", 15: "healthy", 16: "healthy",
-          17: "healthy", 18: "healthy", 19: "missing", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
-          25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "filled", 31: "healthy", 32: "healthy"
-        },
-        treatmentPlan: [
-          { id: 1, title: "ایمپلنت سوئیسی دندان ۱۹", cost: 9500000, status: "completed" },
-          { id: 2, title: "ترمیم کامپوزیت دندان ۱۳", cost: 1800000, status: "planned" }
-        ],
-        prescriptions: [
-          {
-            id: "RX-4019",
-            date: "1405/04/10",
-            drugs: [
-              { name: "قرص آموکسی‌سیلین ۵۰۰ میلی‌گرم", dose: "هر ۸ ساعت یک عدد", duration: "۵ روز" },
-              { name: "کپسول ژلوفن ۴۰۰ میلی‌گرم", dose: "هر ۶ ساعت در صورت درد شدید", duration: "۳ روز" }
-            ],
-            diagnosis: "عفونت لثه اطراف دندان ۱۳"
-          }
-        ]
+  const [patients, setPatients] = useState<any[]>([
+    {
+      id: "P-101",
+      fullName: "سارا احمدی",
+      phone: "09123456789",
+      nationalId: "0012345678",
+      age: 28,
+      gender: "female",
+      history: "حساسیت خفیف به پنی‌سیلین - بدون بیماری زمینه‌ای",
+      bloodType: "A+",
+      dentalChart: {
+        1: "healthy", 2: "healthy", 3: "healthy", 4: "filled", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
+        9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "decayed", 14: "healthy", 15: "healthy", 16: "healthy",
+        17: "healthy", 18: "healthy", 19: "missing", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
+        25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "filled", 31: "healthy", 32: "healthy"
       },
-      {
-        id: "P-102",
-        fullName: "محمد قاسمی",
-        phone: "09198765432",
-        nationalId: "0451234567",
-        age: 45,
-        gender: "male",
-        history: "فشار خون کنترل‌شده با دارو - مصرف آسپرین با هماهنگی",
-        bloodType: "O+",
-        dentalChart: {
-          1: "healthy", 2: "healthy", 3: "missing", 4: "missing", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
-          9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "healthy", 14: "healthy", 15: "healthy", 16: "healthy",
-          17: "healthy", 18: "healthy", 19: "healthy", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
-          25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "decayed", 31: "decayed", 32: "healthy"
-        },
-        treatmentPlan: [
-          { id: 1, title: "۲ واحد ایمپلنت دیجیتال سوئیسی دندان ۳ و ۴", cost: 19000000, status: "in_progress" },
-          { id: 2, title: "عصب‌کشی و روکش دندان ۳۰ و ۳۱", cost: 8600000, status: "planned" }
-        ],
-        prescriptions: []
+      treatmentPlan: [
+        { id: 1, title: "ایمپلنت سوئیسی دندان ۱۹", cost: 9500000, status: "completed" },
+        { id: 2, title: "ترمیم کامپوزیت دندان ۱۳", cost: 1800000, status: "planned" }
+      ],
+      prescriptions: [
+        {
+          id: "RX-4019",
+          date: "1405/04/10",
+          drugs: [
+            { name: "قرص آموکسی‌سیلین ۵۰۰ میلی‌گرم", dose: "هر ۸ ساعت یک عدد", duration: "۵ روز" },
+            { name: "کپسول ژلوفن ۴۰۰ میلی‌گرم", dose: "هر ۶ ساعت در صورت درد شدید", duration: "۳ روز" }
+          ],
+          diagnosis: "عفونت لثه اطراف دندان ۱۳"
+        }
+      ]
+    },
+    {
+      id: "P-102",
+      fullName: "محمد قاسمی",
+      phone: "09198765432",
+      nationalId: "0451234567",
+      age: 45,
+      gender: "male",
+      history: "فشار خون کنترل‌شده با دارو - مصرف آسپرین با هماهنگی",
+      bloodType: "O+",
+      dentalChart: {
+        1: "healthy", 2: "healthy", 3: "missing", 4: "missing", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
+        9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "healthy", 14: "healthy", 15: "healthy", 16: "healthy",
+        17: "healthy", 18: "healthy", 19: "healthy", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
+        25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "decayed", 31: "decayed", 32: "healthy"
       },
-      {
-        id: "P-103",
-        fullName: "نیلوفر راد",
-        phone: "09355556677",
-        nationalId: "0076543210",
-        age: 34,
-        gender: "female",
-        history: "سالم - بدون حساسیت دارویی",
-        bloodType: "B+",
-        dentalChart: {
-          1: "healthy", 2: "healthy", 3: "healthy", 4: "healthy", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
-          9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "healthy", 14: "healthy", 15: "healthy", 16: "healthy",
-          17: "healthy", 18: "healthy", 19: "healthy", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
-          25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "healthy", 31: "healthy", 32: "healthy"
-        },
-        treatmentPlan: [
-          { id: 1, title: "۱۰ واحد کامپوزیت زیبایی IPS فک بالا", cost: 28000000, status: "completed" }
-        ],
-        prescriptions: []
-      }
-    ];
-  });
+      treatmentPlan: [
+        { id: 1, title: "۲ واحد ایمپلنت دیجیتال سوئیسی دندان ۳ و ۴", cost: 19000000, status: "in_progress" },
+        { id: 2, title: "عصب‌کشی و روکش دندان ۳۰ و ۳۱", cost: 8600000, status: "planned" }
+      ],
+      prescriptions: []
+    },
+    {
+      id: "P-103",
+      fullName: "نیلوفر راد",
+      phone: "09355556677",
+      nationalId: "0076543210",
+      age: 34,
+      gender: "female",
+      history: "سالم - بدون حساسیت دارویی",
+      bloodType: "B+",
+      dentalChart: {
+        1: "healthy", 2: "healthy", 3: "healthy", 4: "healthy", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
+        9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "healthy", 14: "healthy", 15: "healthy", 16: "healthy",
+        17: "healthy", 18: "healthy", 19: "healthy", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
+        25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "healthy", 31: "healthy", 32: "healthy"
+      },
+      treatmentPlan: [
+        { id: 1, title: "۱۰ واحد کامپوزیت زیبایی IPS فک بالا", cost: 28000000, status: "completed" }
+      ],
+      prescriptions: []
+    }
+  ]);
 
   // CLINIC FINANCIALS & BOOKKEEPING LEDGER STATES
-  const [transactions, setTransactions] = useState<any[]>(() => {
-    const saved = localStorage.getItem("df_transactions");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "T-1001", type: "income", amount: 9500000, category: "treatment", date: "1405/04/12", description: "پیش‌پرداخت ایمپلنت خانم سارا احمدی", patientId: "P-101" },
-      { id: "T-1002", type: "income", amount: 28000000, category: "treatment", date: "1405/04/10", description: "تسویه حساب کامپوزیت خانم نیلوفر راد", patientId: "P-103" },
-      { id: "T-1003", type: "expense", amount: 12500000, category: "materials", date: "1405/04/08", description: "خرید مواد مصرفی کامپوزیت IPS و گوتاپرکا از شرکت آذرطب" },
-      { id: "T-1004", type: "expense", amount: 4800000, category: "other", date: "1405/04/05", description: "هزینه سرویس و استریل اتوکلاو بخش جراحی" },
-      { id: "T-1005", type: "income", amount: 5000000, category: "treatment", date: "1405/04/04", description: "قسط دوم ایمپلنت آقای محمد قاسمی", patientId: "P-102" }
-    ];
-  });
+  const [transactions, setTransactions] = useState<any[]>([
+    { id: "T-1001", type: "income", amount: 9500000, category: "treatment", date: "1405/04/12", description: "پیش‌پرداخت ایمپلنت خانم سارا احمدی", patientId: "P-101" },
+    { id: "T-1002", type: "income", amount: 28000000, category: "treatment", date: "1405/04/10", description: "تسویه حساب کامپوزیت خانم نیلوفر راد", patientId: "P-103" },
+    { id: "T-1003", type: "expense", amount: 12500000, category: "materials", date: "1405/04/08", description: "خرید مواد مصرفی کامپوزیت IPS و گوتاپرکا از شرکت آذرطب" },
+    { id: "T-1004", type: "expense", amount: 4800000, category: "other", date: "1405/04/05", description: "هزینه سرویس و استریل اتوکلاو بخش جراحی" },
+    { id: "T-1005", type: "income", amount: 5000000, category: "treatment", date: "1405/04/04", description: "قسط دوم ایمپلنت آقای محمد قاسمی", patientId: "P-102" }
+  ]);
 
   // CLIENTS TESTIMONIALS & REVIEWS STATES
-  const [testimonials, setTestimonials] = useState<any[]>(() => {
-    const saved = localStorage.getItem("df_testimonials");
-    if (saved) return JSON.parse(saved);
-    return testimonialsData.map((t, index) => ({ 
-      id: t.id || index + 1, 
-      name: t.name, 
-      treatment: t.treatment, 
-      rating: t.rating, 
-      comment: t.comment, 
-      avatarUrl: t.avatarUrl || `/images/avatar-default.svg`,
-      status: "approved" 
-    }));
-  });
-
-  // Auto save patients, transactions, and testimonials to localStorage on change
-  useEffect(() => {
-    localStorage.setItem("df_patients", JSON.stringify(patients));
-  }, [patients]);
-
-  useEffect(() => {
-    localStorage.setItem("df_transactions", JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem("df_testimonials", JSON.stringify(testimonials));
-  }, [testimonials]);
+  const [testimonials, setTestimonials] = useState<any[]>(testimonialsData.map((t, index) => ({ 
+    id: t.id || index + 1, 
+    name: t.name, 
+    treatment: t.treatment, 
+    rating: t.rating, 
+    comment: t.comment, 
+    avatarUrl: t.avatarUrl || `/images/avatar-default.svg`,
+    status: "approved" 
+  })));
 
   // Determine if we should use local storage fallback
   const [useLocalDb, setUseLocalDb] = useState<boolean>(false);
-  useEffect(() => {
-    localStorage.removeItem("df_use_local_db");
-  }, []);
   const [sharedStateLoaded, setSharedStateLoaded] = useState(false);
 
   // Dynamic Clinic Configuration
-  const [clinicConfig, setClinicConfig] = useState(() => {
-    const saved = localStorage.getItem("df_clinic_config");
-    const defaultData = {
-      phone: "۰۲۱-۲۲۰۰۰۰۰۰ | ۰۲۱-۲۲۰۰۰۰۰۱",
-      phoneRaw: "02122000000",
-      address: "تهران، الهیه، خیابان فرشته, ساختمان پزشکان مریم، طبقه سوم",
-      telegram: "۰۹۱۲۳۴۵۶۷۸۹",
-      workingHours: "شنبه تا چهارشنبه ۹:۰۰ الی ۲۱:۰۰ | پنجشنبه ۹:۰۰ الی ۱۵:۰۰",
-      doctorName: "دکتر مختاری",
-      doctorTitle: "جراح و دندانپزشک زیبایی - فلوشیپ ایمپلنتولوژی دیجیتال از سوئیس",
-      articleDoctorName: "دکتر مریم رضایی",
-      articleDoctorTitle: "متخصص جراحی لثه و ایمپلنت",
-      articleDoctorBio: "عضو هیئت علمی دانشگاه، با بیش از ۱۰ سال سابقه تخصصی در کاشت دندان دیجیتال و اصلاح لبخند هوشمند.",
-      articleDoctorAvatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=250&auto=format&fit=crop",
-      aboutDesc: "هدف ما در دنت فلو برطرف کردن ترس‌ها و دغدغه‌های همیشگی شما از دندانپزشکی است. ما معتقدیم کیفیت و دقت در درمان حق بیمار است و با گردهم‌آوری بهترین متخصصان، به کارگیری فناوری سه‌بعدی دیجیتال و دکوراسیون پزشکی آرامش‌بخش، فضایی رویایی برای درمان به وجود آورده‌ایم.",
-      installmentInfo: "۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود",
-      shiftMorningName: "شیفت صبح",
-      shiftMorningCapacity: 10,
-      shiftAfternoonName: "شیفت عصر / بعد از ظهر",
-      shiftAfternoonCapacity: 10,
-      smileCases: smileCases
-    };
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.smileCases && Array.isArray(parsed.smileCases)) {
-          parsed.smileCases = parsed.smileCases.map((item: any) => {
-            if (item.beforeUrl && item.beforeUrl.endsWith(".svg") && item.beforeUrl.includes("/images/")) {
-              item.beforeUrl = item.beforeUrl.replace(".svg", ".jpg");
-            }
-            if (item.afterUrl && item.afterUrl.endsWith(".svg") && item.afterUrl.includes("/images/")) {
-              item.afterUrl = item.afterUrl.replace(".svg", ".jpg");
-            }
-            return item;
-          });
-        }
-        return { ...defaultData, ...parsed };
-      } catch {
-        return defaultData;
-      }
-    }
-    return defaultData;
+  const [clinicConfig, setClinicConfig] = useState({
+    phone: "۰۲۱-۲۲۰۰۰۰۰۰ | ۰۲۱-۲۲۰۰۰۰۰۱",
+    phoneRaw: "02122000000",
+    address: "تهران، الهیه، خیابان فرشته, ساختمان پزشکان مریم، طبقه سوم",
+    telegram: "۰۹۱۲۳۴۵۶۷۸۹",
+    workingHours: "شنبه تا چهارشنبه ۹:۰۰ الی ۲۱:۰۰ | پنجشنبه ۹:۰۰ الی ۱۵:۰۰",
+    doctorName: "دکتر مختاری",
+    doctorTitle: "جراح و دندانپزشک زیبایی - فلوشیپ ایمپلنتولوژی دیجیتال از سوئیس",
+    aboutDesc: "هدف ما در دنت فلو برطرف کردن ترس‌ها و دغدغه‌های همیشگی شما از دندانپزشکی است. ما معتقدیم کیفیت و دقت در درمان حق بیمار است و با گردهم‌آوری بهترین متخصصان، به کارگیری فناوری سه‌بعدی دیجیتال و دکوراسیون پزشکی آرامش‌بخش، فضایی رویایی برای درمان به وجود آورده‌ایم.",
+    installmentInfo: "۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود",
+    shiftMorningName: "شیفت صبح",
+    shiftMorningCapacity: 10,
+    shiftAfternoonName: "شیفت عصر / بعد از ظهر",
+    shiftAfternoonCapacity: 10,
+    smileCases: smileCases
   });
 
   // Dynamic Services Data
-  const [services, setServices] = useState<Service[]>(() => {
-    const saved = localStorage.getItem("df_services");
-    return saved ? JSON.parse(saved) : servicesData;
-  });
+  const [services, setServices] = useState<Service[]>(servicesData);
 
   // Dynamic AI Bot Configurations
-  const [aiName, setAiName] = useState(() => localStorage.getItem("df_ai_name") || "دستیار هوشمند دنت فلو");
-  const [aiGreeting, setAiGreeting] = useState(() => localStorage.getItem("df_ai_greeting") || "سلام! من دستیار هوشمند و تخصصی کلینیک دندانپزشکی دنت فلو هستم. هر سوالی درباره طرح درمان، هزینه‌ها، اقساط، ترس از دندانپزشکی یا خدمات ما دارید بپرسید؛ من با عشق راهنمایی‌تان می‌کنم! ✨");
-  const [aiPrompt, setAiPrompt] = useState(() => {
-    return localStorage.getItem("df_ai_prompt") || `شما دستیار تخصصی، دلسوز و فوق‌العاده باهوش کلینیک دندانپزشکی دیجیتال "دنت فلو" (DentFlow) هستید. نام شما "دستیار هوشمند دنت فلو" است.
+  const [aiName, setAiName] = useState("دستیار هوشمند دنت فلو");
+  const [aiGreeting, setAiGreeting] = useState("سلام! من دستیار هوشمند و تخصصی کلینیک دندانپزشکی دنت فلو هستم. هر سوالی درباره طرح درمان، هزینه‌ها، اقساط، ترس از دندانپزشکی یا خدمات ما دارید بپرسید؛ من با عشق راهنمایی‌تان می‌کنم! ✨");
+  const [aiPrompt, setAiPrompt] = useState(`شما دستیار تخصصی، دلسوز و فوق‌العاده باهوش کلینیک دندانپزشکی دیجیتال "دنت فلو" (DentFlow) هستید. نام شما "دستیار هوشمند دنت فلو" است.
 وظایف شما:
 ۱. پاسخ به سوالات مراجعین و بیماران درباره مشکلات دندانی، بیماری‌های دهان، خدمات کلینیک، هزینه‌ها، و شرايط اقساطی به زبان فارسی شیوا، صمیمی، دلسوزانه و کاملاً محترمانه.
 ۲. معرفی خدمات مختلف کلینیک دنت فلو (ایمپلنت دیجیتال سوئیسی، لمینت سرامیکی E-max، ونیر کامپوزیت IPS، ارتودنسی نامرئی الاینر، عصب‌کشی روتاری بدون درد، اطفال و جراحی‌های لثه).
@@ -270,8 +206,7 @@ export default function App() {
 ۵. شرایط پرداخت اقساطی بسیار منعطف است: ۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود.
 ۶. برای بیماران با ترس و اضطراب شدید دندانپزشکی، توضیح دهید که ما مجهز به سیستم "سدیشن" (سودیشن یا خواب مصنوعی بسیار ایمن و آرام‌بخش با نظارت متخصص بیهوشی) هستیم تا درمان کاملاً بدون درد و بدون کوچکترین استرسی سپری شود.
 
-به یاد داشته باشید شما سفیر برند دنت فلو هستید و آرامش دادن به بیمار اولویت اول شماست.`;
-  });
+به یاد داشته باشید شما سفیر برند دنت فلو هستید و آرامش دادن به بیمار اولویت اول شماست.`);
 
   const [articles, setArticles] = useState<BlogPost[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -329,7 +264,7 @@ export default function App() {
         }
       } catch (error) {
         console.warn("Unable to load shared clinic state from the server.", error);
-        const saved = localStorage.getItem("df_local_articles");
+        const saved = null;
         setArticles(saved ? JSON.parse(saved) : blogPosts);
       } finally {
         setSharedStateLoaded(true);
@@ -373,11 +308,7 @@ export default function App() {
     return () => clearTimeout(handler);
   }, [sharedStateLoaded, patients, transactions, articles, storedAdminUsername, clinicConfig, services, aiName, aiGreeting, aiPrompt, testimonials, adminToken]);
 
-  useEffect(() => {
-    if (useLocalDb && articles.length > 0) {
-      localStorage.setItem("df_local_articles", JSON.stringify(articles));
-    }
-  }, [articles, useLocalDb]);
+
 
   useEffect(() => {
     const root = document.getElementById("main-container");
@@ -390,12 +321,12 @@ export default function App() {
         document.documentElement.classList.remove("dark");
       }
     }
-    localStorage.setItem("df_dark_theme", isDarkTheme ? "true" : "false");
+    
   }, [isDarkTheme]);
 
   // Client-side local DB initial data
   const getLocalBookings = () => {
-    const saved = localStorage.getItem("df_bookings");
+    const saved = null;
     if (saved) return JSON.parse(saved);
     const initialBookings = [
       {
@@ -423,12 +354,12 @@ export default function App() {
         adminComment: "تایید شد. منتظر تشریف‌فرمایی شما در ساعت ۱۴:۳۰ هستیم."
       }
     ];
-    localStorage.setItem("df_bookings", JSON.stringify(initialBookings));
+
     return initialBookings;
   };
 
   const saveLocalBookings = (bookingsList: any[]) => {
-    localStorage.setItem("df_bookings", JSON.stringify(bookingsList));
+
     setAdminBookings(bookingsList);
   };
 
@@ -447,178 +378,25 @@ export default function App() {
     }
   };
 
-  const isSyncingBookingsRef = useRef(false);
-
-  /**
-   * Transaction Integrity Check:
-   * Validates matching ID, creation timestamp, and basic payload consistency
-   * between local and backend reservation records before marking as 'synced'.
-   */
-  const validateBookingIntegrity = (localB: any, serverB: any): boolean => {
-    if (!localB || !serverB) return false;
-
-    // 1. Validate ID match (case-insensitive)
-    const localId = String(localB.id || "").trim().toLowerCase();
-    const serverId = String(serverB.id || "").trim().toLowerCase();
-    if (!localId || !serverId || localId !== serverId) return false;
-
-    // 2. Validate timestamp existence and parseability
-    const localTs = new Date(localB.createdAt || localB.date || 0).getTime();
-    const serverTs = new Date(serverB.createdAt || serverB.date || 0).getTime();
-    if (isNaN(localTs) || isNaN(serverTs)) return false;
-
-    // 3. Validate key payload properties
-    if (localB.phone && serverB.phone) {
-      const cleanLocalPhone = String(localB.phone).replace(/\D/g, "");
-      const cleanServerPhone = String(serverB.phone).replace(/\D/g, "");
-      if (cleanLocalPhone && cleanServerPhone && !cleanLocalPhone.endsWith(cleanServerPhone) && !cleanServerPhone.endsWith(cleanLocalPhone)) {
-        return false;
-      }
-    }
-
-    return true;
-  };
-
   const fetchAdminBookings = async () => {
-    if (isSyncingBookingsRef.current) return;
-    isSyncingBookingsRef.current = true;
-
+    if (useLocalDb) {
+      setAdminBookings(getLocalBookings());
+      return;
+    }
     try {
       const res = await fetch("/api/bookings");
-      let serverData: any[] = [];
-      let isServerHealthy = false;
-      
       if (res.ok) {
-        serverData = await res.json().catch(() => []);
-        isServerHealthy = Array.isArray(serverData);
-      }
-
-      // Read local storage bookings
-      const localStr = localStorage.getItem("df_bookings");
-      let localBookings: any[] = [];
-      if (localStr) {
-        try {
-          const parsed = JSON.parse(localStr);
-          if (Array.isArray(parsed)) localBookings = parsed;
-        } catch {
-          localBookings = [];
-        }
-      }
-
-      if (isServerHealthy) {
-        // Map of server bookings indexed by lowercase ID
-        const serverMap = new Map<string, any>();
-        serverData.forEach((sb: any) => {
-          if (sb && sb.id) {
-            serverMap.set(String(sb.id).toLowerCase(), sb);
-          }
-        });
-
-        const updatedLocalBookings: any[] = [];
-        const syncedServerList = [...serverData];
-
-        // Process each local booking through transaction integrity check
-        for (const localB of localBookings) {
-          if (!localB || !localB.id) continue;
-
-          const lowerId = String(localB.id).toLowerCase();
-          const existingServerB = serverMap.get(lowerId);
-
-          if (existingServerB) {
-            // Already present on server - perform transaction integrity verification
-            const isIntegrityValid = validateBookingIntegrity(localB, existingServerB);
-            if (isIntegrityValid) {
-              updatedLocalBookings.push({
-                ...localB,
-                ...existingServerB,
-                synced: true,
-                syncedAt: existingServerB.createdAt || localB.createdAt || new Date().toISOString(),
-                integrityVerified: true
-              });
-            } else {
-              // Discrepancy detected; retain local record with warning status to prevent silent data loss
-              console.warn(`[Integrity Warning] Booking ID ${localB.id} failed transaction integrity check.`);
-              updatedLocalBookings.push({
-                ...localB,
-                synced: false,
-                integrityVerified: false
-              });
-            }
-          } else {
-            // Not yet recorded on server - attempt synchronous atomic sync
-            try {
-              const syncRes = await fetch("/api/bookings", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  id: localB.id,
-                  fullName: localB.fullName,
-                  phone: localB.phone,
-                  email: localB.email,
-                  serviceId: localB.serviceId,
-                  date: localB.date,
-                  timeSlot: localB.timeSlot,
-                  notes: localB.notes,
-                  createdAt: localB.createdAt || new Date().toISOString()
-                })
-              });
-
-              if (syncRes.ok) {
-                const createdServerB = await syncRes.json().catch(() => null);
-                if (createdServerB && validateBookingIntegrity(localB, createdServerB)) {
-                  // Transaction verified against backend response
-                  const verifiedBooking = {
-                    ...localB,
-                    ...createdServerB,
-                    synced: true,
-                    syncedAt: new Date().toISOString(),
-                    integrityVerified: true
-                  };
-                  updatedLocalBookings.push(verifiedBooking);
-                  serverMap.set(lowerId, verifiedBooking);
-                  syncedServerList.push(verifiedBooking);
-                } else {
-                  console.warn(`[Sync Integrity Failure] Server response failed integrity validation for ${localB.id}`);
-                  updatedLocalBookings.push({ ...localB, synced: false, integrityVerified: false });
-                }
-              } else {
-                updatedLocalBookings.push({ ...localB, synced: false });
-              }
-            } catch (syncErr) {
-              console.warn(`[Sync Network Error] Could not sync booking ${localB.id}:`, syncErr);
-              updatedLocalBookings.push({ ...localB, synced: false });
-            }
-          }
-        }
-
-        // Deduplicate final list by unique ID (preserving newest version)
-        const dedupedMap = new Map<string, any>();
-        syncedServerList.forEach(b => {
-          if (b && b.id) dedupedMap.set(String(b.id).toLowerCase(), b);
-        });
-        updatedLocalBookings.forEach(b => {
-          if (b && b.id) {
-            const lowerId = String(b.id).toLowerCase();
-            if (!dedupedMap.has(lowerId) || b.synced) {
-              dedupedMap.set(lowerId, b);
-            }
-          }
-        });
-
-        const finalMergedList = Array.from(dedupedMap.values());
-        setAdminBookings(finalMergedList);
-        localStorage.setItem("df_bookings", JSON.stringify(finalMergedList));
+        const data = await res.json();
+        setAdminBookings(data);
       } else {
-        // Fallback to local data if server is unreachable
-        const local = localBookings.length > 0 ? localBookings : getLocalBookings();
-        setAdminBookings(local);
+        setUseLocalDb(true);
+        
+        setAdminBookings(getLocalBookings());
       }
     } catch (err) {
-      console.warn("fetchAdminBookings error, using local database:", err);
-      const local = getLocalBookings();
-      setAdminBookings(local);
-    } finally {
-      isSyncingBookingsRef.current = false;
+      setUseLocalDb(true);
+      
+      setAdminBookings(getLocalBookings());
     }
   };
 
@@ -641,17 +419,10 @@ export default function App() {
   useEffect(() => {
     fetchAdminBookings();
 
-    // Listen for storage events (e.g. from booking creation)
-    const handleStorageChange = () => {
-      fetchAdminBookings();
-    };
-    window.addEventListener("storage", handleStorageChange);
-
     // If logged in as admin, fetch latest bookings and messages from server every 15 seconds to ensure live updates
-    let intervalId: any;
-    if (adminToken) {
+    if (!useLocalDb && adminToken) {
       fetchMessages();
-      intervalId = setInterval(() => {
+      const intervalId = setInterval(() => {
         fetchAdminBookings();
         fetchMessages();
         
@@ -666,203 +437,62 @@ export default function App() {
           .catch(err => console.warn("Polling state error:", err));
           
       }, 15000);
+      return () => clearInterval(intervalId);
     }
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [adminToken]);
+  }, [useLocalDb, adminToken]);
 
   const updateBookingStatus = async (id: string, status: string) => {
-    const cleanId = String(id).trim().toLowerCase();
-    
-    // Optimistically update React state and localStorage immediately
-    setAdminBookings(prev => prev.map(b => String(b.id).trim().toLowerCase() === cleanId ? { ...b, status } : b));
-    const localStr = localStorage.getItem("df_bookings");
-    if (localStr) {
-      try {
-        const parsed = JSON.parse(localStr);
-        const updated = parsed.map((b: any) => String(b.id).trim().toLowerCase() === cleanId ? { ...b, status } : b);
-        localStorage.setItem("df_bookings", JSON.stringify(updated));
-      } catch {}
+    if (useLocalDb) {
+      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, status } : b);
+      saveLocalBookings(updated);
+      return;
     }
-
     try {
       const res = await fetch(`/api/bookings/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status })
       });
-      if (res.ok) {
-        toast.success(status === "approved" ? "نوبت تایید شد." : status === "cancelled" ? "نوبت لغو شد." : "وضعیت نوبت به‌روزرسانی شد.");
-      }
+      if (res.ok) fetchAdminBookings();
     } catch (err) {
-      console.warn("Error updating booking status on server:", err);
+      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, status } : b);
+      saveLocalBookings(updated);
     }
   };
 
   const deleteBooking = async (id: string) => {
-    const cleanId = String(id).trim().toLowerCase();
-
-    // 1. CRITICAL: Immediately remove from local React state and localStorage FIRST
-    // This prevents fetchAdminBookings from seeing the deleted item in localStorage and re-syncing/recreating it!
-    setAdminBookings(prev => prev.filter(b => String(b.id).trim().toLowerCase() !== cleanId));
-    const localStr = localStorage.getItem("df_bookings");
-    if (localStr) {
-      try {
-        const parsed = JSON.parse(localStr);
-        const updated = parsed.filter((b: any) => String(b.id).trim().toLowerCase() !== cleanId);
-        localStorage.setItem("df_bookings", JSON.stringify(updated));
-      } catch {}
+    if (useLocalDb) {
+      const updated = getLocalBookings().filter((b: any) => b.id !== id);
+      saveLocalBookings(updated);
+      return;
     }
-
-    // 2. Execute DELETE on server
     try {
       const res = await fetch(`/api/bookings/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("نوبت با موفقیت حذف شد.");
-      } else {
-        toast.success("نوبت از لیست حذف شد.");
-      }
+      if (res.ok) fetchAdminBookings();
     } catch (err) {
-      console.warn("Delete booking server error:", err);
-      toast.success("نوبت از سیستم حذف گردید.");
+      const updated = getLocalBookings().filter((b: any) => b.id !== id);
+      saveLocalBookings(updated);
     }
   };
 
   const updateBookingDetails = async (id: string, updates: any) => {
-    const cleanId = String(id).trim().toLowerCase();
-
-    // Optimistically update React state and localStorage immediately
-    setAdminBookings(prev => prev.map(b => String(b.id).trim().toLowerCase() === cleanId ? { ...b, ...updates } : b));
-    const localStr = localStorage.getItem("df_bookings");
-    if (localStr) {
-      try {
-        const parsed = JSON.parse(localStr);
-        const updated = parsed.map((b: any) => String(b.id).trim().toLowerCase() === cleanId ? { ...b, ...updates } : b);
-        localStorage.setItem("df_bookings", JSON.stringify(updated));
-      } catch {}
+    if (useLocalDb) {
+      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, ...updates } : b);
+      saveLocalBookings(updated);
+      return;
     }
-
     try {
       const res = await fetch(`/api/bookings/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates)
       });
-      if (res.ok) {
-        toast.success("اطلاعات نوبت ذخیره شد.");
-      }
+      if (res.ok) fetchAdminBookings();
     } catch (err) {
-      console.warn("Error updating booking details on server:", err);
+      const updated = getLocalBookings().map((b: any) => b.id === id ? { ...b, ...updates } : b);
+      saveLocalBookings(updated);
     }
   };
-
-  const validateAndFixArticles = useCallback((articleList: BlogPost[]) => {
-    let modified = false;
-    const fixedArticles = articleList.map(article => {
-      if (!article.content) return article;
-      try {
-        if (article.content.trim().startsWith('[')) {
-          const blocks = JSON.parse(article.content);
-          if (Array.isArray(blocks)) {
-            // Convert legacy JSON blocks format to semantic HTML
-            const htmlContent = blocks.map((block: any) => {
-              switch (block.type) {
-                case "heading": {
-                  let text = "";
-                  let level = "h2";
-                  if (typeof block.value === "string") {
-                    text = block.value;
-                  } else if (block.value) {
-                    text = block.value.text || "";
-                    level = block.value.level || "h2";
-                  }
-                  return `<${level}>${text}</${level}>`;
-                }
-                case "text":
-                  return `<p>${block.value || ""}</p>`;
-                case "quote": {
-                  let text = "";
-                  let author = "";
-                  if (typeof block.value === "string") {
-                    text = block.value;
-                  } else if (block.value) {
-                    text = block.value.text || "";
-                    author = block.value.author || "";
-                  }
-                  const authorAttr = author ? ` data-author="${author}"` : "";
-                  return `<blockquote${authorAttr}><p>${text}</p>${author ? `<cite>— ${author}</cite>` : ""}</blockquote>`;
-                }
-                case "list": {
-                  let items: string[] = [];
-                  let listType = "bullet";
-                  if (Array.isArray(block.value)) {
-                    items = block.value;
-                  } else if (block.value) {
-                    items = block.value.items || [""];
-                    listType = block.value.listType || "bullet";
-                  }
-                  const tag = listType === "ordered" ? "ol" : "ul";
-                  const itemsHtml = items.map((it: string) => `<li>${it}</li>`).join("");
-                  return `<${tag}>${itemsHtml}</${tag}>`;
-                }
-                case "image": {
-                  let url = "";
-                  let caption = "";
-                  if (typeof block.value === "string") {
-                    url = block.value;
-                  } else if (block.value) {
-                    url = block.value.url || "";
-                    caption = block.value.caption || "";
-                  }
-                  return `<img src="${url}" alt="${caption}" style="max-width:100%; border-radius:12px; margin: 16px 0; display: block;" />`;
-                }
-                case "video": {
-                  let url = "";
-                  let caption = "";
-                  if (typeof block.value === "string") {
-                    url = block.value;
-                  } else if (block.value) {
-                    url = block.value.url || "";
-                    caption = block.value.caption || "";
-                  }
-                  return `<div class="dental-video-container" style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:12px; margin: 16px 0;"><iframe src="${url}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen></iframe></div><p style="text-align:center; font-size:12px; color:#64748b; margin-top:-8px;">${caption}</p>`;
-                }
-                case "divider":
-                  return `<hr style="border:0; border-top: 1px dashed #cbd5e1; margin: 24px 0;" />`;
-                default:
-                  return "";
-              }
-            }).join("\n");
-            
-            modified = true;
-            return { ...article, content: htmlContent };
-          }
-        }
-      } catch (e) {
-        // Not a JSON string, ignore
-      }
-      return article;
-    });
-
-    if (modified) {
-      console.log("Article structures fixed!");
-      setArticles(fixedArticles);
-      localStorage.setItem("df_local_articles", JSON.stringify(fixedArticles));
-    }
-  }, []);
-
-  useEffect(() => {
-    // Run the validation once when articles are loaded
-    if (articles.length > 0) {
-      // Only execute if not all articles have valid content (e.g. they contain JSON string arrays)
-      const needsFix = articles.some(a => a.content && a.content.trim().startsWith('['));
-      if (needsFix) {
-        validateAndFixArticles(articles);
-      }
-    }
-  }, [articles, validateAndFixArticles]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -881,7 +511,7 @@ export default function App() {
       setAdminToken(data.token || null);
       setLoginError("");
       setStoredAdminUsername(data.username || adminUsername);
-      localStorage.setItem("df_admin_username", data.username || adminUsername);
+      
     } catch (error) {
       setLoginError("امکان ورود به پنل در این لحظه وجود ندارد.");
     }
@@ -893,79 +523,10 @@ export default function App() {
     window.location.hash = "#booking";
   };
 
-  // Dynamic Title, Canonical & SEO Meta tags updater for Google Search and users
+  // Pure Client Hash-Based Router for clean multi-page transition
   useEffect(() => {
-    if (selectedArticle) {
-      document.title = `${selectedArticle.title} | مقالات تخصصی کلینیک دنت فلو`;
-      
-      const descMeta = document.querySelector('meta[name="description"]');
-      if (descMeta) {
-        descMeta.setAttribute("content", selectedArticle.excerpt || selectedArticle.title);
-      }
-      const ogTitle = document.querySelector('meta[property="og:title"]');
-      if (ogTitle) {
-        ogTitle.setAttribute("content", `${selectedArticle.title} | کلینیک دنت فلو`);
-      }
-      const ogDesc = document.querySelector('meta[property="og:description"]');
-      if (ogDesc) {
-        ogDesc.setAttribute("content", selectedArticle.excerpt || selectedArticle.title);
-      }
-      const ogImage = document.querySelector('meta[property="og:image"]');
-      if (ogImage && selectedArticle.imageUrl) {
-        ogImage.setAttribute("content", selectedArticle.imageUrl.startsWith("http") ? selectedArticle.imageUrl : `https://dentflow.ir${selectedArticle.imageUrl}`);
-      }
-      const canonical = document.querySelector('link[rel="canonical"]');
-      if (canonical) {
-        canonical.setAttribute("href", `https://dentflow.ir/articles/${selectedArticle.id}`);
-      }
-    } else {
-      const sectionTitles: Record<string, string> = {
-        home: "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | DentFlow",
-        services: "خدمات تخصصی ایمپلنت، لمینت و ارتودنسی | کلینیک دنت فلو",
-        assistant: "مشاوره و دستیار هوشمند دندانپزشکی | دنت فلو",
-        about: "درباره کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو",
-        gallery: "گالری اصلاح لبخند و نمونه کارهای دندانپزشکی | دنت فلو",
-        articles: "مقالات و دانستنی‌های علمی دندانپزشکی | دنت فلو",
-        booking: "رزرو آنلاین نوبت دندانپزشکی | کلینیک دنت فلو",
-        contact: "تماس با کلینیک دندانپزشکی دنت فلو و آدرس مطب"
-      };
-      document.title = sectionTitles[activeSection] || "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | DentFlow";
-      
-      const canonical = document.querySelector('link[rel="canonical"]');
-      if (canonical) {
-        canonical.setAttribute("href", activeSection === "home" ? "https://dentflow.ir/" : `https://dentflow.ir/#${activeSection}`);
-      }
-    }
-  }, [selectedArticle, activeSection]);
-
-  // Pure Client Hash & Path Router for clean multi-page transition & direct URL support
-  useEffect(() => {
-    const handleUrlChange = () => {
-      let hash = window.location.hash || "#home";
-      const pathname = window.location.pathname || "";
-
-      // Support path-based URLs like /articles/1 or /article/1 or /services/1
-      if (pathname.startsWith("/articles/") || pathname.startsWith("/article/")) {
-        const pathParts = pathname.split("/");
-        const possibleId = parseInt(pathParts[pathParts.length - 1], 10);
-        if (!isNaN(possibleId)) {
-          hash = `#article/${possibleId}`;
-        }
-      } else if (pathname === "/booking") {
-        hash = "#booking";
-      } else if (pathname === "/articles") {
-        hash = "#articles";
-      } else if (pathname === "/services") {
-        hash = "#services";
-      } else if (pathname === "/about") {
-        hash = "#about";
-      } else if (pathname === "/contact") {
-        hash = "#contact";
-      } else if (pathname === "/gallery") {
-        hash = "#gallery";
-      } else if (pathname === "/assistant") {
-        hash = "#assistant";
-      }
+    const handleHashChange = () => {
+      const hash = window.location.hash || "#home";
       
       if (!hash.startsWith("#article/")) {
         setSelectedArticle(null);
@@ -1010,13 +571,9 @@ export default function App() {
       }
     };
 
-    handleUrlChange();
-    window.addEventListener("hashchange", handleUrlChange);
-    window.addEventListener("popstate", handleUrlChange);
-    return () => {
-      window.removeEventListener("hashchange", handleUrlChange);
-      window.removeEventListener("popstate", handleUrlChange);
-    };
+    handleHashChange();
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, [articles]);
 
   return (
@@ -1032,20 +589,8 @@ export default function App() {
               <div className="flex items-center gap-2.5" id="logo-block">
                 <a href="#home" className="flex items-center gap-2 group" id="logo-link">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 group-hover:scale-105 transition-transform" id="logo-icon-wrapper">
-                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path 
-                        d="M12 3C9.5 3 8 4.2 8 6.5C8 9.5 9.5 11.5 9.5 15C9.5 17.5 7.8 19 8.5 19.5C9.2 20 10.5 18 12 16.5C13.5 18 14.8 20 15.5 19.5C16.2 19 14.5 17.5 14.5 15C14.5 11.5 16 9.5 16 6.5C16 4.2 14.5 3 12 3Z" 
-                        fill="currentColor" 
-                      />
-                      <path 
-                        d="M4 12.5C8 9.5 16 9.5 20 12.5C16 15 8 15 4 12.5Z" 
-                        fill="#38bdf8" 
-                        opacity="0.9" 
-                      />
-                      <path 
-                        d="M17.5 3L18.2 4.3L19.5 5L18.2 5.7L17.5 7L16.8 5.7L15.5 5L16.8 4.3L17.5 3Z" 
-                        fill="#fbbf24" 
-                      />
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                     </svg>
                   </div>
                   <div className="flex flex-col text-right" id="logo-text">
@@ -1263,7 +808,7 @@ export default function App() {
                 <div id="home-assistant-wrapper" className="pt-8">
                   <div className="text-center space-y-2 mb-10">
                     <span className="text-xs font-black text-teal-600 bg-teal-50 px-3 py-1 rounded-full uppercase tracking-wider">مشاوره هوشمند ۲۴ ساعته</span>
-                    <h2 className="text-3xl font-extrabold text-slate-900">دستیار صوتی و متنی هوشمند دنت فلو</h2>
+                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">دستیار صوتی و متنی هوشمند دنت فلو</h2>
                     <p className="text-slate-500 text-xs sm:text-sm font-semibold max-w-2xl mx-auto">به راحتی با دستیار کلینیک صحبت کنید و در ثانیه پاسخ‌های خود درباره خدمات، قیمت‌ها و مراقبت‌ها را دریافت کنید</p>
                   </div>
                   <AiAssistantSection 
@@ -1284,14 +829,13 @@ export default function App() {
                 <div id="home-articles-wrapper" className="pt-8">
                   <div className="text-center space-y-2 mb-10">
                     <span className="text-xs font-black text-teal-600 bg-teal-50 px-3 py-1 rounded-full uppercase tracking-wider">مجله سلامت دهان و دندان</span>
-                    <h2 className="text-3xl font-extrabold text-slate-900">آخرین دانستنی‌ها و مقالات دندانپزشکی دیجیتال</h2>
+                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">آخرین دانستنی‌ها و مقالات دندانپزشکی دیجیتال</h2>
                     <p className="text-slate-500 text-xs sm:text-sm font-semibold max-w-2xl mx-auto">با مطالعه مقالات تایید شده توسط متخصصین دنت فلو، لبخند سالم‌تر و زیباتری داشته باشید</p>
                   </div>
                   <ArticlesSection 
                     articles={articles}
                     selectedArticle={selectedArticle}
                     setSelectedArticle={setSelectedArticle}
-                    clinicConfig={clinicConfig}
                   />
                 </div>
               </motion.div>
@@ -1371,8 +915,6 @@ export default function App() {
                   articles={articles}
                   selectedArticle={selectedArticle}
                   setSelectedArticle={setSelectedArticle}
-                  clinicConfig={clinicConfig}
-                  setArticles={setArticles}
                 />
               </motion.div>
             )}
@@ -1390,7 +932,6 @@ export default function App() {
                   selectedServiceId={selectedServiceId} 
                   services={services}
                   clinicConfig={clinicConfig}
-                  onBookingCreated={fetchAdminBookings}
                 />
               </motion.div>
             )}
@@ -1420,20 +961,8 @@ export default function App() {
               <div className="lg:col-span-5 space-y-4" id="footer-logo-col">
                 <div className="flex items-center gap-2.5" id="footer-logo">
                   <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white" id="footer-logo-icon">
-                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path 
-                        d="M12 3C9.5 3 8 4.2 8 6.5C8 9.5 9.5 11.5 9.5 15C9.5 17.5 7.8 19 8.5 19.5C9.2 20 10.5 18 12 16.5C13.5 18 14.8 20 15.5 19.5C16.2 19 14.5 17.5 14.5 15C14.5 11.5 16 9.5 16 6.5C16 4.2 14.5 3 12 3Z" 
-                        fill="currentColor" 
-                      />
-                      <path 
-                        d="M4 12.5C8 9.5 16 9.5 20 12.5C16 15 8 15 4 12.5Z" 
-                        fill="#38bdf8" 
-                        opacity="0.9" 
-                      />
-                      <path 
-                        d="M17.5 3L18.2 4.3L19.5 5L18.2 5.7L17.5 7L16.8 5.7L15.5 5L16.8 4.3L17.5 3Z" 
-                        fill="#fbbf24" 
-                      />
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                     </svg>
                   </div>
                   <div className="flex flex-col text-right" id="footer-logo-text">

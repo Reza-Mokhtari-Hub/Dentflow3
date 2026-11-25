@@ -99,8 +99,8 @@ export default function SecurityTab({
 
       const cleanNewUsername = newUsernameInput.trim();
       setStoredAdminUsername(cleanNewUsername);
-      localStorage.setItem("df_admin_username", cleanNewUsername);
-      localStorage.removeItem("df_admin_password");
+      
+      
 
       setMessage({
         type: "success",

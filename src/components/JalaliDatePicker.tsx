@@ -99,21 +99,20 @@ export default function JalaliDatePicker({
     setCurrentView((prev) => ({ ...prev, jm, jd: 1 }));
   };
 
-  // Helper to determine if a specific day is a past date
-  const isPastDate = (day: number) => {
-    if (currentView.jy < todayJalali.jy) return true;
-    if (currentView.jy === todayJalali.jy && currentView.jm < todayJalali.jm) return true;
-    if (currentView.jy === todayJalali.jy && currentView.jm === todayJalali.jm) {
-      return day < todayJalali.jd;
-    }
-    return false;
-  };
-
   const handleDaySelect = (day: number) => {
-    if (disablePastDates && isPastDate(day)) {
-      return;
-    }
     const selected: JalaliDate = { jy: currentView.jy, jm: currentView.jm, jd: day };
+    
+    // Check if selecting a past date is disabled
+    if (disablePastDates) {
+      const gSel = jalaliToGregorian(selected.jy, selected.jm, selected.jd);
+      const selDateObj = new Date(gSel.gy, gSel.gm - 1, gSel.gd);
+      const todayDateObj = new Date();
+      todayDateObj.setHours(0, 0, 0, 0);
+      if (selDateObj < todayDateObj) {
+        return; // Do nothing for past dates
+      }
+    }
+
     setSelectedDate(selected);
     onChange(formatJalaliToString(selected));
     setIsOpen(false);
@@ -135,6 +134,15 @@ export default function JalaliDatePicker({
 
   // Generate days range
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  // Helper to determine if a specific day is a past date
+  const isPastDate = (day: number) => {
+    const gDay = jalaliToGregorian(currentView.jy, currentView.jm, day);
+    const dayObj = new Date(gDay.gy, gDay.gm - 1, gDay.gd);
+    const todayObj = new Date();
+    todayObj.setHours(0, 0, 0, 0);
+    return dayObj < todayObj;
+  };
 
   const isSelected = (day: number) => {
     return (

@@ -89,7 +89,7 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
   // Handle saving all current services state to local storage
   const handleSaveAll = () => {
     try {
-      localStorage.setItem("df_services", JSON.stringify(services));
+
       showFeedback("تمامی تغییرات و تعرفه‌های خدمات با موفقیت ذخیره شدند و در سراسر سایت اعمال گردیدند.", "success");
     } catch (err) {
       showFeedback("خطا در ذخیره تغییرات دیتابیس خدمات.", "error");
@@ -132,7 +132,6 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
 
     const updated = [...services, created];
     setServices(updated);
-    localStorage.setItem("df_services", JSON.stringify(updated));
 
     // Reset Form
     setNewService({
@@ -154,7 +153,6 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
 
     const updated = services.filter(s => s.id !== id);
     setServices(updated);
-    localStorage.setItem("df_services", JSON.stringify(updated));
     showFeedback(`خدمت «${title}» با موفقیت حذف گردید.`, "success");
   };
 
@@ -302,6 +300,7 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
                     <span className="text-[10px] sm:text-xs leading-none">{ic.label.split(" ")[0]}</span>
                   </button>
                 );
+          
               })}
             </div>
           </div>
@@ -463,6 +462,7 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
                           {React.createElement(ic.icon, { className: "w-4 h-4" })}
                         </button>
                       );
+                
                     })}
                   </div>
                 </div>
@@ -532,7 +532,7 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
                 <button
                   type="button"
                   onClick={() => {
-                    localStorage.setItem("df_services", JSON.stringify(services));
+              
                     showFeedback(`تغییرات خدمت درمانی «${srv.title}» با موفقیت ثبت و ذخیره شد.`, "success");
                   }}
                   className="w-full py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 hover:text-teal-800 font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-teal-100"
@@ -542,7 +542,8 @@ export default function ServicesTab({ services, setServices }: ServicesTabProps)
                 </button>
               </div>
             </div>
-          );
+            );
+    
         })}
       </div>
     </div>

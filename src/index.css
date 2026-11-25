@@ -1,6 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@700&family=Vazirmatn:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 @import "react-quill-new/dist/quill.snow.css";
 
 @theme {
@@ -97,12 +96,11 @@
   border: none !important;
   border-bottom: 1px solid #f1f5f9 !important;
   background-color: #f8fafc !important;
-  padding: 8px 12px !important;
+  padding: 14px 20px !important;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0 !important;
 }
 
 .dark .premium-quill-wrapper .ql-toolbar.ql-snow {
@@ -116,23 +114,21 @@
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  min-height: 0 !important;
-  position: relative !important;
 }
 
 .premium-quill-wrapper .quill {
   display: flex !important;
   flex-direction: column !important;
   flex: 1 1 0% !important;
-  min-height: 0 !important;
+  height: 100% !important;
   overflow: hidden !important;
 }
 
 .premium-quill-wrapper .ql-editor {
   flex: 1 1 0% !important;
   overflow-y: auto !important;
-  min-height: 0 !important;
-  padding: 20px 24px !important;
+  min-height: unset !important;
+  padding: 24px 28px !important;
   background-color: #ffffff;
   color: #1e293b;
   font-size: 1.05rem;
@@ -496,64 +492,5 @@ html.dark {
 
 #main-container.dark ::-webkit-scrollbar-thumb {
   background: #374151 !important;
-}
-
-.prose img { max-width: 100%; height: auto; } 
-.prose pre { white-space: pre-wrap !important; word-break: break-word !important; overflow-x: hidden !important; }
-
-/* Persian text wrapping fixes & Global Word-Breaking/Letter-Spacing Prevention */
-body, p, span, a, h1, h2, h3, h4, h5, h6, li, button, input, textarea, select, .prose {
-  word-break: keep-all !important;
-  hyphens: none !important;
-  overflow-wrap: break-word !important;
-  word-wrap: break-word !important;
-  letter-spacing: 0px !important;
-}
-
-.rtl-html-content,
-.prose,
-.prose p,
-.prose span,
-.prose li,
-.prose h1,
-.prose h2,
-.prose h3,
-.prose h4,
-.prose h5,
-.prose h6 {
-  white-space: pre-line !important;
-  text-align: justify !important;
-  text-justify: inter-word !important;
-}
-
-/* Custom Design Redesign Styles */
-.dentflow-dot-grid {
-  background-image: radial-gradient(#2dd4bf 2px, transparent 2px);
-  background-size: 32px 32px;
-  background-color: #f0f9f9;
-}
-
-.font-gaegu {
-  font-family: 'Gaegu', cursive, sans-serif;
-}
-
-.font-space-mono {
-  font-family: 'Space Mono', monospace;
-}
-
-.neo-shadow {
-  box-shadow: 10px 10px 0px 0px #2dd4bf;
-}
-
-.neo-shadow-lg {
-  box-shadow: 14px 14px 0px 0px #2dd4bf;
-}
-
-.neo-shadow-dark {
-  box-shadow: 10px 10px 0px 0px #1a3c3a;
-}
-
-.neo-border {
-  border: 3px solid #1a3c3a;
 }
 

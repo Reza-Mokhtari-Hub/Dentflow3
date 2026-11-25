@@ -4,7 +4,7 @@ import { CheckCircle, Search, User, Phone, Lock, Check, AlertCircle, MapPin, Clo
 import { Service } from "../data";
 import { AnimatePresence, motion } from "motion/react";
 import JalaliDatePicker from "./JalaliDatePicker";
-import { toPersianDigits, formatDateToJalaliString } from "../lib/jalali";
+import { toPersianDigits } from "../lib/jalali";
 
 interface BookingSectionProps {
   selectedServiceId: string;
@@ -22,29 +22,9 @@ interface BookingSectionProps {
     shiftMorningName?: string;
     shiftAfternoonName?: string;
   };
-  onBookingCreated?: () => void;
 }
 
-const getTomorrowJalaliStr = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return formatDateToJalaliString(tomorrow);
-};
-
-const normalizePhone = (p: string) => {
-  if (!p) return "";
-  let digits = p
-    .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-    .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-    .replace(/[\s\-\(\)\+]/g, "")
-    .trim();
-  if (digits.startsWith("0098")) digits = "0" + digits.slice(4);
-  else if (digits.startsWith("98")) digits = "0" + digits.slice(2);
-  else if (digits.startsWith("9") && digits.length === 10) digits = "0" + digits;
-  return digits;
-};
-
-export default function BookingSection({ selectedServiceId, services, clinicConfig, onBookingCreated }: BookingSectionProps) {
+export default function BookingSection({ selectedServiceId, services, clinicConfig }: BookingSectionProps) {
   const [bookingTab, setBookingTab] = useState<"new" | "track">("new");
   
   // New Appointment States
@@ -53,7 +33,7 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
     phone: "",
     email: "",
     serviceId: "implant",
-    date: getTomorrowJalaliStr(),
+    date: "",
     timeSlot: "morning",
     notes: ""
   });
@@ -98,11 +78,10 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
       errors.fullName = "نام باید حداقل شامل ۳ حرف باشد.";
     }
 
-    const cleanPhone = normalizePhone(formData.phone);
     const phoneRegex = /^09[0-9]{9}$/;
-    if (!formData.phone.trim()) {
+    if (!formData.phone) {
       errors.phone = "وارد کردن شماره تماس جهت هماهنگی الزامی است.";
-    } else if (!phoneRegex.test(cleanPhone)) {
+    } else if (!phoneRegex.test(formData.phone)) {
       errors.phone = "شماره موبایل وارد شده معتبر نیست. نمونه معتبر: 09123456789";
     }
 
@@ -120,139 +99,52 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    const cleanPhone = normalizePhone(formData.phone);
-    const fallbackRef = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
-    let finalRef = fallbackRef;
-
-    const payload = {
-      ...formData,
-      fullName: formData.fullName.trim(),
-      phone: cleanPhone,
-      email: formData.email ? formData.email.trim() : "",
-      notes: formData.notes ? formData.notes.trim() : ""
-    };
-
-    let isServerSaved = false;
-
     try {
       const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(formData)
       });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && data) {
-        finalRef = data.id || data.refCode || fallbackRef;
-        isServerSaved = true;
+      const data = await response.json();
+      if (response.ok) {
+        setBookingRef(data.id || data.refCode || `DF-${Math.floor(100000 + Math.random() * 900000)}`);
+        setIsSubmitted(true);
       } else {
-        console.warn("Server booking response warning:", data?.error);
-        // Fallback to locally generated reference
-        finalRef = fallbackRef;
+        toast.error(data.error || "ثبت نوبت با خطا مواجه شد.");
       }
     } catch (err) {
-      console.warn("Server booking network error, using local persistence:", err);
-      finalRef = fallbackRef;
-    }
-
-    setBookingRef(finalRef);
-    setIsSubmitted(true);
-    setIsSubmitting(false);
-
-    // Guaranteed local storage persistence for 'df_bookings'
-    try {
-      const newBooking = {
-        id: finalRef,
-        fullName: formData.fullName.trim(),
-        phone: cleanPhone,
-        email: formData.email ? formData.email.trim() : "",
-        serviceId: formData.serviceId || "implant",
-        date: formData.date,
-        timeSlot: formData.timeSlot || "morning",
-        notes: formData.notes ? formData.notes.trim() : "",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        adminComment: "",
-        synced: isServerSaved
-      };
-
-      const existingStr = localStorage.getItem("df_bookings");
-      let existing: any[] = [];
-      if (existingStr) {
-        try { 
-          const parsed = JSON.parse(existingStr);
-          if (Array.isArray(parsed)) existing = parsed;
-        } catch { 
-          existing = []; 
-        }
-      }
-      
-      const filtered = existing.filter((b: any) => b && String(b.id).toLowerCase() !== finalRef.toLowerCase());
-      const updated = [newBooking, ...filtered];
-      localStorage.setItem("df_bookings", JSON.stringify(updated));
-
-      // Trigger custom and storage events for reactive updates across the app
-      window.dispatchEvent(new Event("storage"));
-    } catch (e) {
-      console.warn("Could not save booking to localStorage:", e);
-    }
-
-    if (onBookingCreated) {
-      try {
-        onBookingCreated();
-      } catch (err) {
-        console.warn("onBookingCreated callback error:", err);
-      }
+      console.error("Booking Error:", err);
+      // Fallback
+      setBookingRef(`DF-${Math.floor(100000 + Math.random() * 900000)}`);
+      setIsSubmitted(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Track Booking
   const handleBookingTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    const rawCode = trackCode.trim();
-    if (!rawCode) return;
-
-    // Convert Persian digits in code if any
-    const code = rawCode
-      .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-      .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)]);
+    if (!trackCode.trim()) return;
 
     setIsTrackingLoading(true);
     setTrackError("");
     setTrackedBooking(null);
 
     try {
-      const res = await fetch(`/api/bookings/track/${encodeURIComponent(code)}`);
+      const res = await fetch(`/api/bookings/track/${encodeURIComponent(trackCode.trim())}`);
+      const data = await res.json();
       if (res.ok) {
-        const data = await res.json();
         setTrackedBooking(data);
-        setIsTrackingLoading(false);
-        return;
+      } else {
+        setTrackError(data.error || "نوبتی با این کد رهگیری یافت نشد. لطفاً دقت فرمایید.");
       }
     } catch (err) {
       console.error("Error tracking booking:", err);
+      setTrackError("اتصال به سرور برقرار نشد. لطفاً مجدداً تلاش فرمایید.");
+    } finally {
+      setIsTrackingLoading(false);
     }
-
-    // Fallback to local storage
-    try {
-      const existingStr = localStorage.getItem("df_bookings");
-      let existing = [];
-      if (existingStr) {
-        try { existing = JSON.parse(existingStr); } catch { existing = []; }
-      }
-      if (Array.isArray(existing)) {
-        const found = existing.find((b: any) => String(b.id).toLowerCase() === code.toLowerCase());
-        if (found) {
-          setTrackedBooking(found);
-          setIsTrackingLoading(false);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Local tracking search error:", e);
-    }
-
-    setTrackError("نوبتی با این کد رهگیری یافت نشد. لطفاً در وارد کردن کد دقت فرمایید.");
-    setIsTrackingLoading(false);
   };
 
   const getServiceTitle = (serviceId: string) => {
@@ -538,37 +430,18 @@ export default function BookingSection({ selectedServiceId, services, clinicConf
                           setTrackedBooking(null);
                           try {
                             const res = await fetch(`/api/bookings/track/${encodeURIComponent(bookingRef)}`);
+                            const data = await res.json();
                             if (res.ok) {
-                              const data = await res.json();
                               setTrackedBooking(data);
-                              setIsTrackingLoading(false);
-                              return;
+                            } else {
+                              setTrackError(data.error || "نوبتی با این کد رهگیری یافت نشد.");
                             }
                           } catch (err) {
                             console.error("Error tracking booking:", err);
+                            setTrackError("خطایی رخ داد.");
+                          } finally {
+                            setIsTrackingLoading(false);
                           }
-
-                          // Fallback to local storage
-                          try {
-                            const existingStr = localStorage.getItem("df_bookings");
-                            let existing = [];
-                            if (existingStr) {
-                              try { existing = JSON.parse(existingStr); } catch { existing = []; }
-                            }
-                            if (Array.isArray(existing)) {
-                              const found = existing.find((b: any) => String(b.id).toLowerCase() === bookingRef.toLowerCase());
-                              if (found) {
-                                setTrackedBooking(found);
-                                setIsTrackingLoading(false);
-                                return;
-                              }
-                            }
-                          } catch (e) {
-                            console.warn("Local tracking search error:", e);
-                          }
-
-                          setTrackError("نوبتی با این کد رهگیری یافت نشد.");
-                          setIsTrackingLoading(false);
                         }}
                         className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-teal-600 text-white hover:bg-teal-700 font-extrabold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-teal-600/10"
                       >

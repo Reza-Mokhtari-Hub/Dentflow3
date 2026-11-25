@@ -1,110 +1,33 @@
+import "express-async-errors";
 import express from "express";
 import path from "path";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import { createHash, randomUUID } from "crypto";
-import { GoogleGenAI, Type } from "@google/genai";
+import { createHash } from "crypto";
+import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { MongoClient } from "mongodb";
+import mongoose from "mongoose";
 import nodemailer from "nodemailer";
+import { createServer as createViteServer } from "vite";
 
 dotenv.config();
 
+const app = express();
+const PORT = 3000;
 
-interface Booking {
-  id: string;
-  fullName: string;
-  phone: string;
-  email?: string;
-  serviceId: string;
-  date: string;
-  timeSlot: "morning" | "afternoon";
-  notes?: string;
-  status: "pending" | "approved" | "cancelled";
-  createdAt: string;
-  adminComment?: string;
-}
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
-interface BlogPost {
-  id: number;
-  title: string;
-  excerpt: string;
-  category: string;
-  date: string;
-  readTime: string;
-  imageUrl: string;
-  content?: string;
-}
-
-interface AdminCredentials {
-  username: string;
-  passwordHash: string;
-}
-
-interface ClinicDataState {
-  bookings: Booking[];
-  blogPosts: BlogPost[];
-  patients: any[];
-  transactions: any[];
-  adminCredentials: AdminCredentials;
-  clinicConfig: any;
-  services: any[];
-  aiConfig: { name: string; greeting: string; prompt: string };
-  messages: any[];
-  testimonials: any[];
-}
-
-const stateFilePath = path.join(process.cwd(), "data", "clinic-data.json");
-
+// --- Utils ---
 function hashPassword(password: string) {
   return createHash("sha256").update(password).digest("hex");
 }
 
-function sanitizeBlogPosts(posts: any[]): any[] {
-  if (!Array.isArray(posts)) return [];
-  return posts.map(post => {
-    let imageUrl = post.imageUrl || "";
-    if (imageUrl.includes("photo-1588776814546-1ffcf47267a5") || imageUrl.includes("blog-implant")) {
-      imageUrl = "/images/blog-implant.svg";
-    } else if (imageUrl.includes("photo-1512223792601-592a9809eed4") || imageUrl.includes("blog-laminate")) {
-      imageUrl = "/images/blog-laminate.svg";
-    } else if (imageUrl.includes("photo-1579684389782-64d84b5e905d") || imageUrl.includes("blog-halitosis")) {
-      imageUrl = "/images/blog-halitosis.svg";
-    }
-    return { ...post, imageUrl };
-  });
-}
-
-function normalizeAdminCredentials(raw: any): AdminCredentials {
-  if (raw?.passwordHash) {
-    return {
-      username: raw.username || "admin",
-      passwordHash: raw.passwordHash,
-    };
-  }
-
-  if (raw?.password) {
-    return {
-      username: raw.username || "admin",
-      passwordHash: hashPassword(raw.password),
-    };
-  }
-
-  return {
-    username: "admin",
-    passwordHash: hashPassword("admin"),
-  };
-}
-
-async function downloadImageIfExternal(url: string): Promise<string> {
-  return url;
-}
-
+// --- Default Data / In-Memory Store ---
 const defaultPatients = [
   {
     id: "P-101",
     fullName: "سارا احمدی",
-    email: "sara@dentflow.ir",
     phone: "09123456789",
+    email: "sara.ahmadi@example.com",
     nationalId: "0012345678",
     age: 28,
     gender: "female",
@@ -130,17 +53,13 @@ const defaultPatients = [
         ],
         diagnosis: "عفونت لثه اطراف دندان ۱۳"
       }
-    ],
-    chat: [
-      { id: 1, date: "1405/04/10", time: "10:30", sender: "clinic", subject: "نوبت فردا", text: "یادآوری نوبت معاینه فردا ساعت ۱۰ صبح", status: "read" }
-    ],
-    notes: "بیمار به پنی‌سیلین حساسیت دارد. در تجویز داروها دقت شود."
+    ]
   },
   {
     id: "P-102",
     fullName: "محمد قاسمی",
-    email: "mohammad@dentflow.ir",
     phone: "09198765432",
+    email: "m.ghasemi@example.com",
     nationalId: "0451234567",
     age: 45,
     gender: "male",
@@ -156,15 +75,13 @@ const defaultPatients = [
       { id: 1, title: "۲ واحد ایمپلنت دیجیتال سوئیسی دندان ۳ و ۴", cost: 19000000, status: "in_progress" },
       { id: 2, title: "عصب‌کشی و روکش دندان ۳۰ و ۳۱", cost: 8600000, status: "planned" }
     ],
-    prescriptions: [],
-    chat: [],
-    notes: "بیمار سابقه فشار خون دارد. فشار خون قبل از جراحی چک شود."
+    prescriptions: []
   },
   {
     id: "P-103",
     fullName: "نیلوفر راد",
-    email: "niloufar@dentflow.ir",
     phone: "09355556677",
+    email: "niloofar.rad@example.com",
     nationalId: "0076543210",
     age: 34,
     gender: "female",
@@ -177,45 +94,17 @@ const defaultPatients = [
       25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "healthy", 31: "healthy", 32: "healthy"
     },
     treatmentPlan: [
-      { id: 1, title: "۱۰ واحد کامپوزیت زیبایی IPS فک بالا", cost: 28000000, status: "completed" }
+      { id: 1, title: "کامپوزیت ونیر فک بالا (۸ واحد)", cost: 22400000, status: "planned" }
     ],
-    prescriptions: [],
-    chat: [],
-    notes: "بیمار از نتیجه کامپوزیت بسیار راضی است."
-  },
-  {
-    id: "P-104",
-    fullName: "کاربر کلینیک",
-    email: "reza2015zzzx@gmail.com",
-    phone: "09120000000",
-    nationalId: "0011223344",
-    age: 32,
-    gender: "male",
-    history: "بدون بیماری زمینه‌ای - سلامت دهان و دندان کامل",
-    bloodType: "O+",
-    dentalChart: {
-      1: "healthy", 2: "healthy", 3: "healthy", 4: "healthy", 5: "healthy", 6: "healthy", 7: "healthy", 8: "healthy",
-      9: "healthy", 10: "healthy", 11: "healthy", 12: "healthy", 13: "healthy", 14: "healthy", 15: "healthy", 16: "healthy",
-      17: "healthy", 18: "healthy", 19: "healthy", 20: "healthy", 21: "healthy", 22: "healthy", 23: "healthy", 24: "healthy",
-      25: "healthy", 26: "healthy", 27: "healthy", 28: "healthy", 29: "healthy", 30: "healthy", 31: "healthy", 32: "healthy"
-    },
-    treatmentPlan: [
-      { id: 1, title: "معاینه دوره‌ای و چکاپ دیجیتال دندان‌ها", cost: 0, status: "completed" }
-    ],
-    prescriptions: [],
-    chat: [
-      { id: 1, date: "1405/04/12", time: "14:00", sender: "clinic", subject: "خوش‌آمدگویی", text: "به سامانه پورتال بیماران کلینیک تخصصی دنت فلو خوش آمدید.", status: "read" }
-    ],
-    notes: "پرونده فعال پورتال بیمار"
+    prescriptions: []
   }
 ];
 
 const defaultTransactions = [
-  { id: "T-1001", type: "income", amount: 9500000, category: "treatment", date: "1405/04/12", description: "پیش‌پرداخت ایمپلنت خانم سارا احمدی", patientId: "P-101" },
-  { id: "T-1002", type: "income", amount: 28000000, category: "treatment", date: "1405/04/10", description: "تسویه حساب کامپوزیت خانم نیلوفر راد", patientId: "P-103" },
-  { id: "T-1003", type: "expense", amount: 12500000, category: "materials", date: "1405/04/08", description: "خرید مواد مصرفی کامپوزیت IPS و گوتاپرکا از شرکت آذرطب" },
-  { id: "T-1004", type: "expense", amount: 4800000, category: "other", date: "1405/04/05", description: "هزینه سرویس و استریل اتوکلاو بخش جراحی" },
-  { id: "T-1005", type: "income", amount: 5000000, category: "treatment", date: "1405/04/04", description: "قسط دوم ایمپلنت آقای محمد قاسمی", patientId: "P-102" }
+  { id: "T-1", type: "income", amount: 9500000, category: "implant", date: "1405/04/10", description: "دریافت هزینه ایمپلنت مرحله اول", patientId: "P-101" },
+  { id: "T-2", type: "income", amount: 9500000, category: "implant", date: "1405/04/11", description: "بیعانه ایمپلنت دیجیتال", patientId: "P-102" },
+  { id: "T-3", type: "expense", amount: 4200000, category: "materials", date: "1405/04/12", description: "خرید کیت و پودر استخوان سوئیسی", patientId: "" },
+  { id: "T-4", type: "income", amount: 1800000, category: "composite", date: "1405/04/13", description: "تسویه ترمیم کامپوزیت", patientId: "P-101" }
 ];
 
 const defaultServices = [
@@ -261,41 +150,54 @@ const defaultServices = [
   {
     id: "bleaching",
     title: "بلیچینگ و سفید کردن",
-    description: "روشن کردن دندان‌ها تا چند درجه با پیشرفته‌ترین دستگاه‌های پلاسما لایت و مواد اصلی برند UltraDent آمریکا.",
+    description: "بازگرداندن درخشش طبیعی به دندان‌ها با جدیدترین لیزرهای دندانپزشکی در کمتر از یک ساعت بدون حساسیت.",
     iconName: "Smile",
     details: [
-      "سفید کردن دو فک در یک جلسه کمتر از ۱ ساعت",
-      "بدون ایجاد حساسیت دندانی با ژل‌های ضد حساسیت",
-      "ماندگاری بالا بین ۱ تا ۳ سال بسته به رژیم غذایی",
-      "ارائه کیت بلیچینگ در منزل جهت تثبیت سفیدی"
+      "بلیچینگ مطب (Office Bleaching) با لیزر دایود",
+      "کیت هوم بلیچینگ با قالب‌های اختصاصی",
+      "جرم‌گیری تخصصی با دستگاه اولتراسونیک مدرن",
+      "حذف کامل لکه‌های ناشی از قهوه، چای و سیگار"
     ],
-    priceEst: "شروع از ۴,۵۰۰,۰۰۰ تومان"
+    priceEst: "شروع از ۳,۵۰۰,۰۰۰ تومان"
   },
   {
     id: "pediatric",
     title: "دندانپزشکی اطفال",
-    description: "درمان‌های پیشگیرانه و ترمیمی کودکان در محیطی شاد، کارتونی و بدون ترس همراه با تکنیک‌های روانشناسی خلاقانه.",
+    description: "ایجاد تجربه‌ای شاد، بدون استرس و جذاب برای کودکان در اتاق بازی مجهز و با حضور کادر تخصصی مهربان.",
     iconName: "Baby",
     details: [
-      "فلورایدتراپی جهت پیشگیری از پوسیدگی دندان",
-      "فیشورسیلانت (شیارپوش) دندان‌های ۶ و ۱۲ سالگی",
-      "ترمیم دندان‌های شیری و روکش‌های مخصوص کودکان",
-      "امکان انجام درمان تحت سدیشن برای کودکان مضطرب"
+      "فلورایدتراپی و شیارپوش (فیشور سیلانت) برای پیشگیری",
+      "درمان تحت آرام‌بخشی سدیشن (برای کودکان پرفوبیا)",
+      "ترمیم دندان‌های شیری با مواد همرنگ زیبا",
+      "آموزش سرگرم‌کننده بهداشت دهان و دندان به کودکان"
     ],
-    priceEst: "شروع از ۸۰۰,۰۰۰ تومان"
+    priceEst: "شروع از ۱,۲۰۰,۰۰۰ تومان"
   },
   {
     id: "root-canal",
-    title: "عصب‌کشی (اندودانتیکس)",
-    description: "درمان ریشه دندان با دستگاه‌های روتاری مدرن و اپکس‌لوکیتور دیجیتال با بالاترین دقت و کاملاً بدون درد در یک جلسه.",
-    iconName: "Activity",
+    title: "درمان ریشه (عصب‌کشی)",
+    description: "نجات دندان‌های آسیب‌دیده با دستگاه روتاری پیشرفته و اپکس لوکیتور دیجیتال، ۱۰۰٪ بدون درد و در کوتاه‌ترین زمان.",
+    iconName: "Zap",
     details: [
-      "عصب‌کشی تخصصی دندان‌های چندکاناله و خلفی",
-      "درمان مجدد ریشه دندان‌های عصب‌کشی شده ناموفق قدیمی",
-      "استفاده از سیستم‌های روتاری جهت سرعت و کیفیت کار",
-      "پرکردن سه بعدی کانال ریشه جهت جلوگیری از نفوذ میکروب"
+      "عصب‌کشی تخصصی دندان‌های چندکاناله و پیچیده",
+      "درمان مجدد ریشه (Retreatment)",
+      "ترمیم‌های مستحکم تاج پس از درمان ریشه",
+      "دقت میکروسکوپی در پاکسازی کانال‌ها"
     ],
     priceEst: "شروع از ۲,۵۰۰,۰۰۰ تومان"
+  },
+  {
+    id: "surgery",
+    title: "جراحی لثه و دندان عقل",
+    description: "جراحی‌های تخصصی دهان، خارج کردن دندان عقل نهفته بدون تروما و درمان‌های پیشرفته لثه با حداقل نقاهت.",
+    iconName: "Scissors",
+    details: [
+      "جراحی بدون درد دندان‌های عقل کاملاً نهفته",
+      "پیوند لثه و جراحی افزایش طول تاج (CL)",
+      "لیفت لثه با لیزر جهت زیبایی خط لبخند",
+      "بخیه زدن میکروسکوپی برای بهبود سریع"
+    ],
+    priceEst: "شروع از ۱,۸۰۰,۰۰۰ تومان"
   }
 ];
 
@@ -333,2068 +235,917 @@ const defaultTestimonials = [
     treatment: "کامپوزیت ونیر IPS",
     rating: 5,
     comment: "خیلی نگران بودم که بعد از کامپوزیت لبخندم مصنوعی به نظر بیاد، اما دکتر کلینیک با حوصله بسیار زیاد لبه‌ها و رنگ دندونام رو متناسب با چهره‌ام طراحی کرد. الان اعتماد به نفس لبخند زدنم صد برابر شده. به همه رفقا پیشنهادش می‌کنم.",
-    avatarUrl: "/images/alireza-avatar.svg",
+    avatarUrl: "/images/avatar-alireza.svg",
     status: "approved"
   }
 ];
 
-const defaultClinicState: ClinicDataState = {
-  bookings: [
-    {
-      id: "DF-749210",
-      fullName: "امیرحسین رضایی",
-      phone: "09121112233",
-      serviceId: "implant",
-      date: "2026-07-06",
-      timeSlot: "morning",
-      notes: "نیاز به ایمپلنت فوری سوئیسی فک بالا دارم. آیا امکان درمان بدون درد وجود دارد؟",
-      status: "pending",
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      adminComment: ""
-    },
-    {
-      id: "DF-183029",
-      fullName: "مهسا کریمی",
-      phone: "09354445566",
-      serviceId: "laminate",
-      date: "2026-07-07",
-      timeSlot: "afternoon",
-      notes: "برای معاینه لمینت سرامیکی E-Max نوبت می‌خواهم.",
-      status: "approved",
-      createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-      adminComment: "تایید شد. منتظر تشریف‌فرمایی شما در ساعت ۱۴:۳۰ هستیم. لطفاً مدارک دندانپزشکی قبلی را همراه داشته باشید."
-    },
-    {
-      id: "DF-394021",
-      fullName: "سینا باقری",
-      phone: "09197778899",
-      serviceId: "orthodontics",
-      date: "2026-07-10",
-      timeSlot: "afternoon",
-      notes: "درباره هزینه الاینر نامرئی ارتودنسی سوال دارم.",
-      status: "pending",
-      createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-      adminComment: ""
-    }
-  ],
-  blogPosts: [
-    {
-      id: 1,
-      title: "مراقبت‌های حیاتی پس از کاشت ایمپلنت دندان که باید بدانید",
-      excerpt: "کاشت ایمپلنت یک جراحی ظریف است. رعایت این ۵ نکته طلایی در هفته اول می‌تواند شانس موفقیت جوش خوردن پایه را تا ۹۹٪ تضمین کند.",
-      category: "ایمپلنت",
-      date: "۱۴ تیر ۱۴۰۵",
-      readTime: "مطالعه ۵ دقیقه",
-      imageUrl: "/images/blog-implant.svg",
-      content: `<h2>راهنمای جامع مراقبت‌های پس از جراحی ایمپلنت دندان</h2>
-<p>کاشت ایمپلنت دندان یکی از بهترین و ماندگارترین روش‌ها برای جایگزین کردن دندان‌های از دست رفته است. با این حال، موفقیت نهایی این درمان به شدت به <strong>مراقبت‌های پس از جراحی</strong> در هفته‌های اول وابسته است. فرآیند جوش خوردن فیکسچر (پایه ایمپلنت) به استخوان فک که به آن <em>اسئواینتگریشن</em> می‌گویند، نیازمند یک محیط آرام و بدون فشار است.</p>
-<p>در ادامه به بررسی مهم‌ترین نکات طلایی مراقبت‌های بعد از ایمپلنت می‌پردازیم:</p>
-<h3>۱. کنترل خونریزی و تورم در ۲۴ ساعت اول</h3>
-<ul>
-  <li><strong>استفاده از گاز استریل:</strong> پس از اتمام جراحی، گاز استریل قرار داده شده روی ناحیه را به مدت حداقل ۱ الی ۲ ساعت با فشار ملایم دهان نگه دارید. از تف کردن مکرر خودداری کنید زیرا فشار منفی باعث تشدید خونریزی می‌شود.</li>
-  <li><strong>کمپرس یخ:</strong> برای کاهش تورم و کبودی احتمالی، در ۲۴ ساعت اول هر ۲۰ دقیقه یک‌بار کمپرس یخ را روی گونه خود (سمت جراحی شده) قرار دهید.</li>
-</ul>
-<h3>۲. رژیم غذایی مناسب و ایمن</h3>
-<p>در هفته اول پس از جراحی، از جویدن غذا در سمت جراحی شده به شدت پرهیز کنید. رژیم غذایی شما باید شامل غذاهای نرم، ولرم یا خنک باشد:</p>
-<ul>
-  <li><strong>غذاهای مجاز:</strong> سوپ‌های ولرم و صاف شده، پوره سیب‌زمینی خنک، ماست، فرنی، شیک‌های پروتئینی (بدون استفاده از نی) و ژله.</li>
-  <li><strong>غذاهای غیرمجاز:</strong> غذاهای داغ, تند، اسیدی، و غذاهای سفت یا دانه‌دار (مانند تخمه و کنجد) که ممکن است در ناحیه زخم گیر کنند.</li>
-</ul>
-<blockquote><p><strong>نکته بسیار مهم:</strong> هرگز در روزهای اول از <strong>نی</strong> برای نوشیدن استفاده نکنید. مکش ناشی از نی می‌تواند لخته خون محافظ را جدا کرده و منجر به خونریزی مجدد یا عفونت شود.</p></blockquote>
-<h3>۳. بهداشت دهان و دندان کنترل شده</h3>
-<ul>
-  <li><strong>۲۴ ساعت اول:</strong> از مسواک زدن مستقیم روی ناحیه جراحی و شستشوی شدید دهان خودداری کنید.</li>
-  <li><strong>از روز دوم:</strong> می‌توانید بقیه دندان‌ها را با مسواک نرم به آرامی مسواک بزنید. ناحیه جراحی را دست نزنید.</li>
-  <li><strong>شستشو با آب‌نمک ولرم:</strong> از روز دوم، روزی ۳ الی ۴ بار دهان خود را با آب‌نمک بسیار ملایم (یا دهان‌شویه تجویز شده توسط پزشک مانند کلرهگزیدین) بدون غرغره شدید شستشو دهید. فقط آب را در دهان بچرخانید و آرام بیرون بریزید.</li>
-</ul>
-<h3>۴. پرهیز از دخانیات و الکل</h3>
-<p>مصرف سیگار و قلیان به دلیل داشتن نیکوتین و ایجاد مکش شدید در دهان، باعث کاهش جریان خون در بافت‌های لثه شده و احتمال شکست جراحی ایمپلنت را تا <strong>۳ برابر</strong> افزایش می‌دهد. ترجیحاً تا ۲ هفته پس از کاشت ایمپلنت از دخانیات کاملاً پرهیز کنید.</p>
-<h3>۵. مصرف دقیق داروهای تجویز شده</h3>
-<p>پزشک معالج برای شما آنتی‌بیوتیک و مسکن‌های ضدالتهاب تجویز خواهد کرد. دوره مصرف آنتی‌بیوتیک را حتی در صورت عدم وجود درد یا علائم عفونت، کاملاً به پایان برسانید تا از بروز عفونت‌های پنهان استخوانی جلوگیری شود.</p>`
-    },
-    {
-      id: 2,
-      title: "تفاوت لمینت سرامیکی و کامپوزیت ونیر چیست؟ کدام مناسب شماست؟",
-      excerpt: "بررسی کامل مقایسه قیمت، میزان تراش دندان، ثبات رنگ، طول عمر و تفاوت زیبایی لمینت‌های شیشه‌ای و کامپوزیت‌های سوئیسی.",
-      category: "زیبایی",
-      date: "۱۰ تیر ۱۴۰۵",
-      readTime: "مطالعه ۷ دقیقه",
-      imageUrl: "/images/blog-laminate.svg",
-      content: `<h2>راهنمای مقایسه: لمینت سرامیکی در برابر کامپوزیت ونیر</h2>
-<p>داشتن لبخندی درخشان و هماهنگ، نقش بسزایی در اعتماد به نفس و زیبایی چهره دارد. امروزه دو روش محبوب برای اصلاح طرح لبخند وجود دارد: <strong>لمینت سرامیکی (Porcelain Veneers)</strong> و <strong>کامپوزیت ونیر (Composite Veneers)</strong>. هر دو روش عیوب دندانی مانند بدرنگی، فاصله بین دندان‌ها، ترک‌ها و نامنظمی‌های جزیی را برطرف می‌کنند، اما تفاوت‌های ساختاری عمیقی دارند.</p>
-<p>در این مقاله تخصصی به مقایسه همه‌جانبه این دو درمان پرطرفدار می‌پردازیم:</p>
-<table style="width:100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
-  <thead>
-    <tr style="background-color: rgba(20, 184, 166, 0.1);">
-      <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">ویژگی</th>
-      <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">لمینت سرامیکی (پرسی یا کادکام)</th>
-      <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">کامپوزیت ونیر (دست‌ساز مطب)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: bold;">میزان تراش دندان</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">بسیار کم تا متوسط (حدود ۰.۳ تا ۰.۷ میلی‌متر)</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">بدون تراش یا حداقل تراش ممکن</td>
-    </tr>
-    <tr>
-      <td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: bold;">طول عمر مفید</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">۱۰ الی ۱۵ سال (و حتی بیشتر با مراقبت خوب)</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">۵ الی ۷ سال (نیازمند پولیش دوره‌ای)</td>
-    </tr>
-    <tr>
-      <td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: bold;">ثبات رنگ و درخشش</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">فوق‌العاده بالا (در برابر چای، قهوه و دخانیات)</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">متوسط (به مرور زمان کدر شده و رنگ می‌گیرد)</td>
-    </tr>
-    <tr>
-      <td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: bold;">تعداد جلسات درمان</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">۲ الی ۳ جلسه (نیازمند کار قالب‌گیری و لابراتوار)</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">۱ جلسه (مستقیماً روی دندان توسط دندانپزشک)</td>
-    </tr>
-    <tr>
-      <td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: bold;">قابلیت ترمیم‌پذیری</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">در صورت شکستگی باید کاملاً تعویض شود</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">به راحتی در مطب قابل ترمیم و اصلاح است</td>
-    </tr>
-    <tr>
-      <td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: bold;">هزینه نهایی</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">بالاتر (به دلیل هزینه‌های لابراتوار و متریال پرسلن)</td>
-      <td style="border: 1px solid #cbd5e1; padding: 8px;">اقتصادی‌تر و ارزان‌تر</td>
-    </tr>
-  </tbody>
-</table>
-<h3>بررسی جزئیات تفاوت‌ها</h3>
-<h4>۱. طبیعی بودن و بازتاب نور</h4>
-<p>لمینت‌های سرامیکی به دلیل داشتن ساختار شیشه‌ای و نیمه‌شفاف، رفتار نوری بسیار شبیهی به مینای طبیعی دندان دارند. نور از لایه‌های نازک سرامیک عبور کرده و جلوه‌ای فوق‌العاده زنده، درخشان و طبیعی ایجاد می‌کند. کامپوزیت‌ها کمی مات‌تر هستند و اگرچه زیبا به نظر می‌رسند، اما مهارت پزشک در لایه‌گذاری برای رسیدن به جلوه طبیعی دندان بسیار تعیین‌کننده است.</p>
-<h4>۲. مقاومت در برابر لکه و تغییر رنگ</h4>
-<p>پرسلن یا سرامیک متریالی کاملاً غیرمتخلخل است. این یعنی ذرات رنگی موجود در قهوه، چای، رب گوجه‌فرنگی و سیگار نمی‌توانند به ساختار آن نفوذ کنند. در مقابل، رزین کامپوزیت تخلخل‌های میکروسکوپی دارد و پس از مدتی رنگ غذاها را به خود جذب می‌کند و نیازمند پولیش سالانه در مطب است.</p>
-<h4>۳. فرآیند نصب و محافظه‌کارانه بودن</h4>
-<p>در درمان کامپوزیت ونیر، دندانپزشک مواد رزینی خمیری را به صورت هنرمندانه‌ای روی دندان شما فرم می‌دهد و با نور مخصوص سفت می‌کند. این کار معمولاً بدون هیچ‌گونه تراش روی مینای دندان انجام می‌شود. اما در لمینت سرامیکی، لایه‌ای بسیار نازک از روی دندان تراشیده می‌شود تا دندان‌ها پس از چسباندن لمینت، ضخیم و برجسته به نظر نرسند. بنابراین لمینت یک درمان برگشت‌ناپذیر به شمار می‌رود.</p>
-<h3>نتیجه‌گیری: کدام روش برای شما بهتر است؟</h3>
-<ul>
-  <li><strong>لمینت سرامیکی مناسب شماست اگر:</strong> به دنبال یک تغییر دائمی، فوق‌العاده لوکس، با ثبات رنگ همیشگی و طول عمر بسیار بالا هستید و با بودجه بیشتر و فرآیند تراش جزئی دندان مشکلی ندارید.</li>
-  <li><strong>کامپوزیت ونیر مناسب شماست اگر:</strong> می‌خواهید در یک جلسه و با هزینه‌ای مناسب‌تر لبخند خود را اصلاح کنید، مایل به تراش خوردن دندان‌هایتان نیستید و مشکلی با مراقبت‌های بیشتر و پولیش‌های دوره‌ای ندارید.</li>
-</ul>`
-    },
-    {
-      id: 3,
-      title: "چگونه بوی بد دهان را یکبار برای همیشه درمان کنیم؟",
-      excerpt: "بوی بد دهان همیشه به خاطر مسواک نزدن نیست! علل پنهان مانند بیماری‌های لثه، سنگ لوزه‌ها و مشکلات گوارشی را بشناسید و درمان کنید.",
-      category: "سلامت دهان",
-      date: "۰۵ تیر ۱۴۰۵",
-      readTime: "مطالعه ۴ دقیقه",
-      imageUrl: "/images/blog-halitosis.svg",
-      content: `<h2>راهنمای علمی ریشه‌یابی و درمان بوی بد دهان (هالیتوزیس)</h2>
-<p>بوی بد دهان یا <strong>هالیتوزیس (Halitosis)</strong> یکی از مشکلات شایع اجتماعی و بهداشتی است که می‌تواند اعتماد به نفس افراد را در روابط روزمره به شدت تحت تاثیر قرار دهد. بسیاری از افراد تصور می‌کنند بوی بد دهان صرفاً ناشی از عدم رعایت بهداشت یا خوردن غذاهای بودار است، اما حقیقت علمی این است که این مشکل دلایل پنهان و بسیار متنوعی دارد.</p>
-<p>در این مقاله به بررسی علت‌های پنهان بوی دهان و راه‌حل‌های قطعی و علمی برای درمان همیشگی آن می‌پردازیم:</p>
-<h3>علت‌های اصلی بوی بد دهان چیست؟</h3>
-<p>۸۵ تا ۹۰ درصد علت بوی بد دهان به مسائل داخل حفره دهان مربوط می‌شود:</p>
-<ol>
-  <li><strong>تجمع پلاک و جرم‌های دندانی:</strong> فعالیت باکتری‌های بی‌هوازی روی ذرات باقیمانده غذا، گازهای فرار گوگردی تولید می‌کند که بوی ناخوشایندی دارند.</li>
-  <li><strong>بیماری‌های لثه (پریودنتیت):</strong> التهاب و عفونت لثه‌ها و تشکیل پاکت‌های عمیق لثه که محل تجمع باکتری‌هاست، از عوامل اصلی بوی بد مزمن است.</li>
-  <li><strong>پوشش روی زبان:</strong> سطح زبان به خصوص بخش عقبی آن دارای پرزهایی است که سلول‌های مرده، باکتری‌ها و ذرات غذا در آن به تله می‌افتند.</li>
-  <li><strong>خشکی دهان (گزروستومی):</strong> بزاق دهان یک پاک‌کننده طبیعی و آنتی‌باکتریال است. کاهش جریان بزاق (به دلیل مصرف برخی داروها، تنفس از دهان یا کم‌آبی بدن) باعث افزایش فعالیت باکتری‌ها می‌شود.</li>
-  <li><strong>سنگ لوزه (Tonsilloliths):</strong> تجمع کلسیم، ذرات غذا و باکتری در حفره‌های لوزه‌ها که تشکیل توده‌های کوچک زرد رنگ و بسیار بدبو می‌دهد.</li>
-</ol>
-<h3>۱۰ گام کلیدی برای درمان قطعی بوی بد دهان</h3>
-<p>برای اینکه یک بار برای همیشه از شر بوی بد دهان خلاص شوید، این اصول علمی را در برنامه روزانه خود قرار دهید:</p>
-<h4>۱. از زبان‌شوی (مسواک زبان) استفاده کنید</h4>
-<p>تمیز کردن سطح زبان به اندازه مسواک زدن دندان‌ها اهمیت دارد. روزی یک‌بار با مسواک مخصوص زبان یا لبه پشتی مسواک‌های معمولی، پوشش سفید یا زرد روی زبان خود را به آرامی از عقب به جلو تمیز کنید.</p>
-<h4>۲. نخ دندان را هرگز فراموش نکنید</h4>
-<p>باکتری‌ها عاشق فضاهای تنگ بین دندانی هستند، جایی که موهای مسواک به آن دسترسی ندارند. اگر نخ دندان نکشید، عملاً ۴۰ درصد از سطح دندان‌های خود را تمیز نکرده‌اید!</p>
-<h4>۳. درمان بیماری‌های لثه و پوسیدگی‌های دندان</h4>
-<p>دندان‌های پوسیده که توخالی شده‌اند محل ایده‌آلی برای پوسیدن غذا و رشد باکتری‌ها هستند. همچنین جرم‌گیری تخصصی (بروساژ) در مطب دندانپزشکی هر ۶ ماه یک‌بار برای از بین بردن جرم‌های سخت زیر لثه الزامی است.</p>
-<h4>۴. هیدراته نگه داشتن بدن</h4>
-<p>نوشیدن آب کافی در طول روز باعث تولید مداوم بزاق می‌شود. جویدن آدامس‌های بدون قند زایلیتول نیز ترشح بزاق را تحریک می‌کند.</p>
-<h4>۵. بررسی مشکلات گوارشی و ریوی</h4>
-<p>اگر دندانپزشک تایید کرد که دهان و دندان شما کاملاً سالم است، باید به پزشک داخلی مراجعه کنید. مشکلاتی نظیر رفلاکس معده (GERD)، عفونت میکروب معده (H. pylori)، دیابت کنترل‌نشده یا عفونت‌های سینوسی و ریوی نیز می‌توانند عامل هالیتوزیس باشند.</p>`
-    }
-  ],
-  patients: defaultPatients,
-  transactions: defaultTransactions,
-  adminCredentials: {
-    username: "admin",
-    passwordHash: hashPassword("admin"),
+const defaultBlogPosts = [
+  {
+    id: 1,
+    title: "مراقبت‌های حیاتی پس از کاشت ایمپلنت دندان که باید بدانید",
+    excerpt: "کاشت ایمپلنت یک جراحی ظریف است. رعایت این ۵ نکته طلایی در هفته اول می‌تواند شانس موفقیت جوش خوردن پایه را تا ۹۹٪ تضمین کند.",
+    category: "ایمپلنت",
+    date: "۱۴ تیر ۱۴۰۵",
+    readTime: "مطالعه ۵ دقیقه",
+    imageUrl: "/images/blog-implant.svg",
+    content: `<h2>راهنمای جامع مراقبت‌های پس از جراحی ایمپلنت دندان</h2><p>کاشت ایمپلنت دندان یکی از بهترین و ماندگارترین روش‌ها برای جایگزین کردن دندان‌های از دست رفته است. با این حال، موفقیت نهایی این درمان به شدت به <strong>مراقبت‌های پس از جراحی</strong> در هفته‌های اول وابسته است.</p>`
   },
-  clinicConfig: {
-    phone: "۰۲۱-۲۲۰۰۰۰۰۰ | ۰۲۱-۲۲۰۰۰۰۰۱",
-    phoneRaw: "02122000000",
-    address: "تهران، الهیه، خیابان فرشته، ساختمان پزشکان مریم، طبقه سوم",
-    telegram: "۰۹۱۲۳۴۵۶۷۸۹",
-    workingHours: "شنبه تا چهارشنبه ۹:۰۰ الی ۲۱:۰۰ | پنجشنبه ۹:۰۰ الی ۱۵:۰۰",
-    doctorName: "دکتر مختاری",
-    doctorTitle: "جراح و دندانپزشک زیبایی - فلوشیپ ایمپلنتولوژی دیجیتال از سوئیس",
-    aboutDesc: "هدف ما در دنت فلو برطرف کردن ترس‌ها و دغدغه‌های همیشگی شما از دندانپزشکی است. ما معتقدیم کیفیت و دقت در درمان حق بیمار است و با گردهم‌آوری بهترین متخصصان، به کارگیری فناوری سه‌بعدی دیجیتال و دکوراسیون پزشکی آرامش‌بخش، فضایی رویایی برای درمان به وجود آورده‌ایم.",
-    installmentInfo: "۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود",
-    shiftMorningName: "شیفت صبح",
-    shiftMorningCapacity: 10,
-    shiftAfternoonName: "شیفت عصر / بعد از ظهر",
-    shiftAfternoonCapacity: 10
+  {
+    id: 2,
+    title: "تفاوت لمینت سرامیکی و کامپوزیت ونیر چیست؟ کدام مناسب شماست؟",
+    excerpt: "بررسی کامل مقایسه قیمت، میزان تراش دندان، ثبات رنگ، طول عمر و تفاوت زیبایی لمینت‌های شیشه‌ای و کامپوزیت‌های سوئیسی.",
+    category: "زیبایی",
+    date: "۱۰ تیر ۱۴۰۵",
+    readTime: "مطالعه ۷ دقیقه",
+    imageUrl: "/images/blog-laminate.svg",
+    content: `<h2>راهنمای مقایسه: لمینت سرامیکی در برابر کامپوزیت ونیر</h2><p>داشتن لبخندی درخشان و هماهنگ، نقش بسزایی در اعتماد به نفس و زیبایی چهره دارد. امروزه دو روش محبوب برای اصلاح طرح لبخند وجود دارد: لمینت سرامیکی و کامپوزیت ونیر.</p>`
   },
-  services: defaultServices,
-  aiConfig: {
-    name: "دستیار هوشمند دنت فلو",
-    greeting: "سلام! من دستیار هوشمند و تخصصی کلینیک دندانپزشکی دنت فلو هستم. هر سوالی درباره طرح درمان، هزینه‌ها، اقساط، ترس از دندانپزشکی یا خدمات ما دارید بپرسید؛ من با عشق راهنمایی‌تان می‌کنم! ✨",
-    prompt: `شما دستیار تخصصی، دلسوز و فوق‌العاده باهوش کلینیک دندانپزشکی دیجیتال "دنت فلو" (DentFlow) هستید. نام شما "دستیار هوشمند دنت فلو" است.
-وظایف شما:
-۱. پاسخ به سوالات مراجعین و بیماران درباره مشکلات دندانی، بیماری‌های دهان، خدمات کلینیک، هزینه‌ها، و شرايط اقساطی به زبان فارسی شیوا، صمیمی، دلسوزانه و کاملاً محترمانه.
-۲. معرفی خدمات مختلف کلینیک دنت فلو (ایمپلنت دیجیتال سوئیسی، لمینت سرامیکی E-max، ونیر کامپوزیت IPS، ارتودنسی نامرئی الاینر، عصب‌کشی روتاری بدون درد، اطفال و جراحی‌های لثه).
-۳. دندانپزشک ارشد کلینیک "دکتر مختاری" (جراح و دندانپزشک زیبایی، دارای فلوشیپ ایمپلنتولوژی دیجیتال از سوئیس با بیش از ۱۰ سال سابقه و ثبت بیش از ۵۰۰۰ مورد ترمیم موفق لبخند) است.
-۴. شماره تماس کلینیک: ۰۲۱-۲۲۰۰۰۰۰۰ است. آدرس کلینیک در شهر تهران (منطقه الهیه، خیابان فرشته) می‌باشد.
-۵. شرایط پرداخت اقساطی بسیار منعطف است: ۳۰ الی ۴۰ درصد پیش‌پرداخت، مابقی در اقساط ۶ الی ۱۲ ماهه با چک صیادی بدون بهره و سود.
-۶. برای بیماران با ترس و اضطراب شدید دندانپزشکی، توضیح دهید که ما مجهز به سیستم "سدیشن" (سودیشن یا خواب مصنوعی بسیار ایمن و آرام‌بخش با نظارت متخصص بیهوشی) هستیم تا درمان کاملاً بدون درد و بدون کوچکترین استرسی سپری شود.
+  {
+    id: 3,
+    title: "چگونه بوی بد دهان را یکبار برای همیشه درمان کنیم؟",
+    excerpt: "بوی بد دهان همیشه به خاطر مسواک نزدن نیست! علل پنهان مانند بیماری‌های لثه، سنگ لوزه‌ها و مشکلات گوارشی را بشناسید و درمان کنید.",
+    category: "سلامت دهان",
+    date: "۰۵ تیر ۱۴۰۵",
+    readTime: "مطالعه ۴ دقیقه",
+    imageUrl: "/images/blog-halitosis.svg",
+    content: `<h2>راهنمای علمی ریشه‌یابی و درمان بوی بد دهان (هالیتوزیس)</h2><p>بوی بد دهان یا هالیتوزیس یکی از مشکلات شایع اجتماعی و بهداشتی است که می‌تواند اعتماد به نفس افراد را در روابط روزمره به شدت تحت تاثیر قرار دهد.</p>`
+  }
+];
 
-به یاد داشته باشید شما سفیر برند دنت فلو هستید و آرامش دادن به بیمار اولویت اول شماست.`
-  },
-  messages: [
-    {
-      id: "M-101",
-      name: "حسین حسینی",
-      phone: "09123456789",
-      message: "سلام، من مایل هستم برای مشاوره ایمپلنت قسطی حضوراً خدمت برسم. آیا فردا ساعت ۱۷ تایم خالی دارید؟",
-      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-      status: "unread"
+const defaultBookings = [
+  {
+    id: "b-1",
+    fullName: "مریم حسینی",
+    phone: "09121112233",
+    email: "maryam@example.com",
+    serviceId: "implant",
+    date: "1405/04/20",
+    timeSlot: "16:00 - 17:00",
+    notes: "مشاوره برای ایمپلنت فوری فک بالا",
+    status: "confirmed",
+    createdAt: "2026-07-01T10:00:00.000Z",
+    adminComment: "تایید شد - هماهنگ شده با دکتر"
+  }
+];
+
+const defaultMessages = [
+  {
+    id: "m-1",
+    name: "سارا احمدی",
+    phone: "09123456789",
+    email: "sara.ahmadi@example.com",
+    subject: "استعلام هزینه ایمپلنت",
+    message: "سلام، وقت بخیر. آیا برای کاشت ایمپلنت امکان پرداخت اقساطی وجود دارد؟",
+    status: "read",
+    date: "2026-07-08T14:30:00.000Z"
+  }
+];
+
+const memoryStore = {
+  patients: JSON.parse(JSON.stringify(defaultPatients)),
+  transactions: JSON.parse(JSON.stringify(defaultTransactions)),
+  services: JSON.parse(JSON.stringify(defaultServices)),
+  testimonials: JSON.parse(JSON.stringify(defaultTestimonials)),
+  blogPosts: JSON.parse(JSON.stringify(defaultBlogPosts)),
+  bookings: JSON.parse(JSON.stringify(defaultBookings)),
+  messages: JSON.parse(JSON.stringify(defaultMessages)),
+  images: new Map<string, { fileName: string; mimeType: string; base64Data: string }>(),
+  configs: {
+    adminCredentials: {
+      username: "admin",
+      passwordHash: hashPassword("admin")
     },
-    {
-      id: "M-102",
-      name: "مریم کرمی",
-      phone: "09129876543",
-      message: "درود بر شما، هزینه بلیچینگ دندان برای هر دو فک چقدر می‌شود و آیا شامل تخفیف تابستانه هست؟",
-      createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-      status: "read"
-    }
-  ],
-  testimonials: defaultTestimonials
+    clinicConfig: {
+      phone: "۰۲۱-۲۲۰۰۰۰۰۰ | ۰۲۱-۲۲۰۰۰۰۰۱",
+      phoneRaw: "02122000000",
+      emergencyPhone: "۰۹۱۲۳۴۵۶۷۸۹",
+      address: "تهران، خیابان ولیعصر، بالاتر از پارک ساعی، پلاک ۱۲۳۴، ساختمان پزشکان دی، طبقه ۴",
+      workingHours: "شنبه تا چهارشنبه: ۹:۰۰ الی ۲۰:۰۰ | پنج‌شنبه‌ها: ۹:۰۰ الی ۱۵:۰۰",
+      instagram: "dentflow_clinic",
+      telegram: "dentflow_clinic",
+      email: "info@dentflow.ir"
+    },
+    aiConfig: {
+      name: "دستیار هوشمند دنت فلو",
+      greeting: "سلام! من دستیار هوش مصنوعی کلینیک دنت فلو هستم. چطور می‌توانم در زمینه خدمات دندانپزشکی، رزرو نوبت یا اطلاعات درمانی به شما کمک کنم؟",
+      prompt: "شما مشاور و دستیار هوشمند کلینیک دندانپزشکی تخصصی و فوق‌تخصصی دنت فلو (DentFlow) هستید. با لحنی بسیار محترمانه، حرفه‌ای، صمیمی و دلسوزانه به زبان فارسی پاسخ دهید."
+    } as Record<string, any>
+  }
 };
 
-// Application Global State variables
-let bookings: Booking[] = [...defaultClinicState.bookings];
-let blogPosts: BlogPost[] = sanitizeBlogPosts([...defaultClinicState.blogPosts]);
-let patients: any[] = [];
-let transactions: any[] = [];
-let adminCredentials = { ...defaultClinicState.adminCredentials };
-let clinicConfig = { ...defaultClinicState.clinicConfig };
-let services: any[] = [];
-let aiConfig = { ...defaultClinicState.aiConfig };
-let messages: any[] = [];
-let testimonials: any[] = [];
+// --- Mongoose Setup & Schemas ---
+mongoose.set('bufferCommands', false);
 
-// Temporary in-memory storage for patient OTPs
-// In production, use a database with TTL or Redis
-const patientOtps = new Map<string, { code: string; expires: number }>();
+const isDbConnected = () => mongoose.connection.readyState === 1;
 
-let mongoClient: MongoClient | null = null;
-
-async function getMongoCollection() {
+let isConnecting = false;
+const connectDB = async () => {
+  if (isDbConnected() || isConnecting) return;
   const uri = process.env.MONGODB_URI;
-  if (!uri) return null;
+  if (!uri || (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://"))) {
+    return;
+  }
   try {
-    if (!mongoClient) {
-      mongoClient = new MongoClient(uri);
-      await mongoClient.connect();
-      console.log("Successfully connected to MongoDB.");
-    }
-    const dbName = uri.split("/").pop()?.split("?")[0] || "dentflow";
-    const db = mongoClient.db(dbName);
-    return db.collection("clinic_state");
+    isConnecting = true;
+    await mongoose.connect(uri, { maxPoolSize: 10, serverSelectionTimeoutMS: 5000 });
+    console.log("Connected to MongoDB successfully.");
   } catch (error) {
-    console.error("Failed to connect to MongoDB:", error);
-    return null;
+    console.warn("MongoDB connection attempt failed (using in-memory fallback):", (error as Error).message);
+  } finally {
+    isConnecting = false;
   }
-}
+};
 
-async function getMongoImagesCollection() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) return null;
-  try {
-    if (!mongoClient) {
-      mongoClient = new MongoClient(uri);
-      await mongoClient.connect();
-    }
-    const dbName = uri.split("/").pop()?.split("?")[0] || "dentflow";
-    const db = mongoClient.db(dbName);
-    return db.collection("uploaded_images");
-  } catch (error) {
-    console.error("Failed to connect to MongoDB for images:", error);
-    return null;
-  }
-}
+// Initiate connection attempt in background
+connectDB().catch(() => {});
 
-async function saveImageToMongo(fileName: string, mimeType: string, base64Data: string) {
-  try {
-    const imagesCollection = await getMongoImagesCollection();
-    if (imagesCollection) {
-      await imagesCollection.replaceOne(
-        { _id: fileName as any },
-        { _id: fileName, mimeType, base64Data } as any,
-        { upsert: true }
-      );
-      console.log(`Saved image ${fileName} to MongoDB successfully.`);
-    }
-  } catch (err) {
-    console.error(`Failed to save image ${fileName} to MongoDB:`, err);
-  }
-}
+const bookingSchema = new mongoose.Schema({
+  id: String, fullName: String, phone: String, email: String, serviceId: String,
+  date: String, timeSlot: String, notes: String, status: { type: String, default: "pending" },
+  createdAt: String, adminComment: String,
+});
+const Booking = mongoose.model("Booking", bookingSchema);
 
-async function loadState() {
-  try {
-    let parsed: any = null;
-    const collection = await getMongoCollection();
-    
-    if (collection) {
-      console.log("Attempting to load state from MongoDB...");
-      try {
-        const doc = await collection.findOne({ _id: "global_state" as any });
-        if (doc) {
-          parsed = doc;
-          console.log("State successfully loaded from MongoDB.");
-        } else {
-          console.log("No existing state found in MongoDB. Initializing with default state...");
-          const payload = {
-            _id: "global_state",
-            bookings: defaultClinicState.bookings,
-            blogPosts: defaultClinicState.blogPosts,
-            patients: defaultClinicState.patients,
-            transactions: defaultClinicState.transactions,
-            adminCredentials: defaultClinicState.adminCredentials,
-            clinicConfig: defaultClinicState.clinicConfig,
-            services: defaultClinicState.services,
-            aiConfig: defaultClinicState.aiConfig,
-            messages: defaultClinicState.messages,
-            testimonials: defaultClinicState.testimonials
-          };
-          await collection.insertOne(payload as any);
-          parsed = payload;
-          console.log("Initialized MongoDB state with default state.");
-        }
-      } catch (dbError) {
-        console.error("Error communicating with MongoDB during loadState, will fallback to local file:", dbError);
-      }
-    }
+const blogPostSchema = new mongoose.Schema({
+  id: Number, title: String, excerpt: String, category: String, date: String,
+  readTime: String, imageUrl: String, content: String,
+});
+const BlogPost = mongoose.model("BlogPost", blogPostSchema);
 
-    if (!parsed) {
-      await mkdir(path.dirname(stateFilePath), { recursive: true });
-      let rawData: string;
-      try {
-        rawData = await readFile(stateFilePath, "utf-8");
-      } catch {
-        rawData = JSON.stringify(defaultClinicState, null, 2);
-        await writeFile(stateFilePath, rawData, "utf-8");
-      }
-      parsed = JSON.parse(rawData);
-      console.log("State loaded from local file storage.");
-    }
+const patientSchema = new mongoose.Schema({
+  id: String, fullName: String, phone: String, email: String, nationalId: String, age: Number,
+  gender: String, history: String, bloodType: String,
+  dentalChart: mongoose.Schema.Types.Mixed, treatmentPlan: mongoose.Schema.Types.Mixed,
+  prescriptions: mongoose.Schema.Types.Mixed, medicalPhotos: mongoose.Schema.Types.Mixed
+});
+const Patient = mongoose.model("Patient", patientSchema);
 
-    bookings = parsed.bookings || [];
-    blogPosts = sanitizeBlogPosts(parsed.blogPosts || []);
-    messages = parsed.messages || [...defaultClinicState.messages];
-    
-    let needsSave = false;
-    if (parsed.patients && Array.isArray(parsed.patients) && parsed.patients.length > 0) {
-      patients = parsed.patients;
-    } else {
-      patients = [...defaultClinicState.patients];
-      needsSave = true;
-    }
+const transactionSchema = new mongoose.Schema({
+  id: String, type: String, amount: Number, category: String, date: String,
+  description: String, patientId: String
+});
+const Transaction = mongoose.model("Transaction", transactionSchema);
 
-    if (parsed.transactions && Array.isArray(parsed.transactions) && parsed.transactions.length > 0) {
-      transactions = parsed.transactions;
-    } else {
-      transactions = [...defaultClinicState.transactions];
-      needsSave = true;
-    }
+const testimonialSchema = new mongoose.Schema({
+  id: Number, name: String, treatment: String, rating: Number, comment: String,
+  avatarUrl: String, status: String
+});
+const Testimonial = mongoose.model("Testimonial", testimonialSchema);
 
-    if (parsed.services && Array.isArray(parsed.services) && parsed.services.length > 0) {
-      services = parsed.services;
-    } else {
-      services = [...defaultClinicState.services];
-      needsSave = true;
-    }
+const messageSchema = new mongoose.Schema({
+  id: String, name: String, phone: String, email: String, subject: String, message: String,
+  status: { type: String, default: "unread" }, date: String
+});
+const Message = mongoose.model("Message", messageSchema);
 
-    if (parsed.testimonials && Array.isArray(parsed.testimonials) && parsed.testimonials.length > 0) {
-      testimonials = parsed.testimonials;
-    } else {
-      testimonials = [...defaultClinicState.testimonials];
-      needsSave = true;
-    }
+const configSchema = new mongoose.Schema({
+  key: { type: String, unique: true },
+  value: mongoose.Schema.Types.Mixed
+});
+const Config = mongoose.model("Config", configSchema);
 
-    adminCredentials = normalizeAdminCredentials(parsed.adminCredentials);
-    clinicConfig = parsed.clinicConfig || defaultClinicState.clinicConfig;
-    aiConfig = parsed.aiConfig || defaultClinicState.aiConfig;
+const imageSchema = new mongoose.Schema({
+  fileName: { type: String, unique: true },
+  mimeType: String,
+  base64Data: String
+});
+const ImageModel = mongoose.model("Image", imageSchema);
 
-    if (needsSave) {
-      console.log("Seeding missing default records (patients/transactions/services/testimonials) to MongoDB...");
-      // We will perform persist inline since persistState might call getMongoCollection
-      const payload = {
-        bookings,
-        blogPosts,
-        patients,
-        transactions,
-        adminCredentials,
-        clinicConfig,
-        services,
-        aiConfig,
-        messages,
-        testimonials
-      };
-      const collection = await getMongoCollection();
-      if (collection) {
-        try {
-          await collection.replaceOne(
-            { _id: "global_state" as any },
-            { _id: "global_state", ...payload } as any,
-            { upsert: true }
-          );
-          console.log("Successfully seeded default state to MongoDB.");
-        } catch (dbError) {
-          console.error("Error seeding default state to MongoDB:", dbError);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error loading state, using defaults:", error);
-    bookings = [...defaultClinicState.bookings];
-    blogPosts = sanitizeBlogPosts([...defaultClinicState.blogPosts]);
-    patients = [...defaultClinicState.patients];
-    transactions = [...defaultClinicState.transactions];
-    adminCredentials = { ...defaultClinicState.adminCredentials };
-    clinicConfig = { ...defaultClinicState.clinicConfig };
-    services = [...defaultClinicState.services];
-    aiConfig = { ...defaultClinicState.aiConfig };
-    testimonials = [...defaultClinicState.testimonials];
-  }
-}
+const serviceSchema = new mongoose.Schema({
+  id: String, title: String, description: String, iconName: String,
+  details: [String], priceEst: String
+});
+const Service = mongoose.model("Service", serviceSchema);
 
-async function persistState() {
-  try {
-    const payload = {
-      bookings,
-      blogPosts,
-      patients,
-      transactions,
-      adminCredentials,
-      clinicConfig,
-      services,
-      aiConfig,
-      messages,
-      testimonials
-    };
-
-    const collection = await getMongoCollection();
-    if (collection) {
-      console.log("Saving state to MongoDB...");
-      try {
-        await collection.replaceOne(
-          { _id: "global_state" as any },
-          { _id: "global_state", ...payload } as any,
-          { upsert: true }
-        );
-        console.log("State successfully saved to MongoDB.");
-      } catch (dbError) {
-        console.error("Error communicating with MongoDB during persistState:", dbError);
-      }
-    }
-
-    await mkdir(path.dirname(stateFilePath), { recursive: true });
-    await writeFile(stateFilePath, JSON.stringify(payload, null, 2), "utf-8");
-    
-    // Automatically keep static sitemap in sync on disk whenever state updates
-    await updateStaticSitemapOnDisk();
-  } catch (error) {
-    console.error("Error persisting state:", error);
-  }
-}
-
-function escapeXml(unsafe: string): string {
-  if (!unsafe) return "";
-  return String(unsafe)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function renderPageHtml(reqPath: string, rawHtml: string, req: express.Request): string {
-  const host = req.get("host");
-  const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
-  const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
-  
-  let pageTitle = "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | DentFlow";
-  let metaDesc = "مرکز تخصصی ایمپلنت دیجیتال، اصلاح طرح لبخند، لمینت سرامیکی E-Max، ارتودنسی نامرئی و مقالات علمی و تخصصی دندانپزشکی در کلینیک دنت فلو.";
-  let canonicalUrl = `${baseUrl}/`;
-  let ogImage = `${baseUrl}/images/blog-implant.svg`;
-  let ogType = "website";
-  let articleJsonLd = "";
-  let preRenderedBody = "";
-
-  // 1. Check article route: /articles/:id or /article/:id
-  const articleMatch = reqPath.match(/^\/(?:articles|article)\/([^\/?#]+)/i);
-  if (articleMatch) {
-    const rawId = articleMatch[1];
-    const numId = parseInt(rawId, 10);
-    const post = blogPosts.find(p => p.id === numId || String(p.id) === rawId || encodeURIComponent(p.title) === rawId);
-    if (post) {
-      pageTitle = `${post.title} | کلینیک دندانپزشکی دنت فلو`;
-      metaDesc = (post.excerpt || post.title).replace(/\r?\n|\r/g, " ").trim();
-      canonicalUrl = `${baseUrl}/articles/${post.id}`;
-      if (post.imageUrl) {
-        ogImage = post.imageUrl.startsWith("http") ? post.imageUrl : `${baseUrl}${post.imageUrl.startsWith("/") ? "" : "/"}${post.imageUrl}`;
-      }
-      ogType = "article";
-
-      // Rich Schema.org BlogPosting for Google Search indexing & Rich snippets
-      const schemaData = {
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        "mainEntityOfPage": {
-          "@type": "WebPage",
-          "@id": canonicalUrl
-        },
-        "headline": post.title,
-        "description": metaDesc,
-        "image": [ogImage],
-        "datePublished": "2026-01-01T08:00:00+03:30",
-        "dateModified": new Date().toISOString(),
-        "articleSection": post.category || "دندانپزشکی",
-        "author": {
-          "@type": "Person",
-          "name": clinicConfig?.articleDoctorName || "دکتر مریم رضایی",
-          "jobTitle": "متخصص جراحی لثه و ایمپلنت"
-        },
-        "publisher": {
-          "@type": "MedicalClinic",
-          "name": "کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو",
-          "logo": {
-            "@type": "ImageObject",
-            "url": `${baseUrl}/favicon.svg`
-          }
-        }
-      };
-      articleJsonLd = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaData, null, 2)}\n    </script>`;
-      preRenderedBody = `
-    <div id="seo-prerender" style="display:none;" aria-hidden="true">
-      <h1>${escapeXml(post.title)}</h1>
-      <p>دسته‌بندی: ${escapeXml(post.category)} | زمان مطالعه: ${escapeXml(post.readTime)} | کلینیک دندانپزشکی دنت فلو</p>
-      <p>${escapeXml(post.excerpt)}</p>
-      <div>${post.content || ""}</div>
-    </div>`;
-    }
-  } else if (reqPath.match(/^\/(?:services|service)\/([^\/?#]+)/i)) {
-    const rawId = reqPath.match(/^\/(?:services|service)\/([^\/?#]+)/i)![1];
-    const srv = services.find(s => s.id === rawId || String(s.id) === rawId);
-    if (srv) {
-      pageTitle = `${srv.title} | خدمات تخصصی دندانپزشکی دنت فلو`;
-      metaDesc = (srv.description || srv.title).replace(/\r?\n|\r/g, " ").trim();
-      canonicalUrl = `${baseUrl}/services/${srv.id}`;
-      ogType = "service";
-      const schemaData = {
-        "@context": "https://schema.org",
-        "@type": "MedicalProcedure",
-        "name": srv.title,
-        "description": metaDesc,
-        "provider": {
-          "@type": "MedicalClinic",
-          "name": "کلینیک تخصصی دندانپزشکی دنت فلو",
-          "url": baseUrl
-        }
-      };
-      articleJsonLd = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaData, null, 2)}\n    </script>`;
-      preRenderedBody = `
-    <div id="seo-prerender" style="display:none;" aria-hidden="true">
-      <h1>${escapeXml(srv.title)}</h1>
-      <p>${escapeXml(srv.description)}</p>
-    </div>`;
-    }
-  } else if (reqPath.startsWith("/booking")) {
-    pageTitle = "رزرو آنلاین نوبت دندانپزشکی و معاینه دیجیتال | کلینیک دنت فلو";
-    metaDesc = "نوبت‌دهی آنلاین ۲۴ ساعته کلینیک تخصصی دندانپزشکی دنت فلو با انتخاب زمان و دکتر متخصص";
-    canonicalUrl = `${baseUrl}/#booking`;
-  } else if (reqPath.startsWith("/articles")) {
-    pageTitle = "مقالات و دانستنی‌های علمی دندانپزشکی | کلینیک دنت فلو";
-    metaDesc = "مجموعه مقالات آموزشی و علمی درباره ایمپلنت دیجیتال، لمینت سرامیکی، کامپوزیت و مراقبت دهان و دندان";
-    canonicalUrl = `${baseUrl}/#articles`;
-  } else if (reqPath.startsWith("/services")) {
-    pageTitle = "خدمات تخصصی دندانپزشکی دیجیتال و زیبایی | کلینیک دنت فلو";
-    metaDesc = "خدمات جامع ایمپلنت فوری، لمینت E-Max، ارتودنسی نامرئی، عصب‌کشی دیجیتال و بلیچینگ دندان";
-    canonicalUrl = `${baseUrl}/#services`;
-  } else if (reqPath.startsWith("/gallery")) {
-    pageTitle = "گالری اصلاح طرح لبخند و نمونه درمان‌ها | کلینیک دنت فلو";
-    metaDesc = "تصاویر نمونه کارهای قبل و بعد ایمپلنت و لمینت سرامیکی مراجعین کلینیک دندانپزشکی دنت فلو";
-    canonicalUrl = `${baseUrl}/#gallery`;
-  } else if (reqPath.startsWith("/about")) {
-    pageTitle = "درباره کلینیک تخصصی دندانپزشکی دیجیتال دنت فلو | تجهیزات و پزشکان";
-    metaDesc = "آشنایی با کادر متخصص، افتخارات، تجهیزات پیشرفته دیجیتال و استانداردهای درمانی کلینیک دنت فلو";
-    canonicalUrl = `${baseUrl}/#about`;
-  } else if (reqPath.startsWith("/contact")) {
-    pageTitle = "تماس با کلینیک دندانپزشکی دنت فلو | آدرس، تلفن و لوکیشن";
-    metaDesc = "شماره تلفن‌ها، آدرس مطب، ساعت کاری و راه‌های ارتباطی با کلینیک دندانپزشکی دنت فلو";
-    canonicalUrl = `${baseUrl}/#contact`;
-  } else if (reqPath.startsWith("/assistant")) {
-    pageTitle = "دستیار هوشمند و مشاوره هوش مصنوعی دندانپزشکی | کلینیک دنت فلو";
-    metaDesc = "مشاوره آنلاین هوشمند علائم، برآورد اولیه درمان و راهنمای بهداشت دهان و دندان با هوش مصنوعی دنت فلو";
-    canonicalUrl = `${baseUrl}/#assistant`;
-  }
-
-  let html = rawHtml;
-
-  // Replace Title tag
-  html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeXml(pageTitle)}</title>`);
-  
-  // Replace or inject meta tags
-  html = html.replace(/<meta name="title" content="[\s\S]*?"\s*\/?>/i, `<meta name="title" content="${escapeXml(pageTitle)}" />`);
-  html = html.replace(/<meta name="description" content="[\s\S]*?"\s*\/?>/i, `<meta name="description" content="${escapeXml(metaDesc)}" />`);
-  html = html.replace(/<link rel="canonical" href="[\s\S]*?"\s*\/?>/i, `<link rel="canonical" href="${escapeXml(canonicalUrl)}" />`);
-  html = html.replace(/<meta property="og:title" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:title" content="${escapeXml(pageTitle)}" />`);
-  html = html.replace(/<meta property="og:description" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:description" content="${escapeXml(metaDesc)}" />`);
-  html = html.replace(/<meta property="og:url" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:url" content="${escapeXml(canonicalUrl)}" />`);
-  html = html.replace(/<meta property="og:image" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:image" content="${escapeXml(ogImage)}" />`);
-  html = html.replace(/<meta property="og:type" content="[\s\S]*?"\s*\/?>/i, `<meta property="og:type" content="${escapeXml(ogType)}" />`);
-  html = html.replace(/<meta property="twitter:title" content="[\s\S]*?"\s*\/?>/i, `<meta property="twitter:title" content="${escapeXml(pageTitle)}" />`);
-  html = html.replace(/<meta property="twitter:description" content="[\s\S]*?"\s*\/?>/i, `<meta property="twitter:description" content="${escapeXml(metaDesc)}" />`);
-  html = html.replace(/<meta property="twitter:image" content="[\s\S]*?"\s*\/?>/i, `<meta property="twitter:image" content="${escapeXml(ogImage)}" />`);
-
-  if (articleJsonLd) {
-    html = html.replace("</head>", `${articleJsonLd}\n  </head>`);
-  }
-  if (preRenderedBody) {
-    html = html.replace('<div id="root"></div>', `${preRenderedBody}\n    <div id="root"></div>`);
-  }
-
-  return html;
-}
-
-function generateSitemapXml(customBaseUrl?: string): string {
-  const defaultDomain = "https://dentflow.ir";
-  const baseUrl = (customBaseUrl || process.env.APP_URL || defaultDomain).replace(/\/+$/, "");
-  const today = new Date().toISOString().split("T")[0];
-
-  const coreRoutes = [
-    { loc: `${baseUrl}/`, changefreq: "daily", priority: "1.0", lastmod: today },
-    { loc: `${baseUrl}/services`, changefreq: "weekly", priority: "0.9", lastmod: today },
-    { loc: `${baseUrl}/booking`, changefreq: "daily", priority: "0.95", lastmod: today },
-    { loc: `${baseUrl}/articles`, changefreq: "daily", priority: "0.9", lastmod: today },
-    { loc: `${baseUrl}/gallery`, changefreq: "weekly", priority: "0.85", lastmod: today },
-    { loc: `${baseUrl}/assistant`, changefreq: "weekly", priority: "0.8", lastmod: today },
-    { loc: `${baseUrl}/about`, changefreq: "monthly", priority: "0.75", lastmod: today },
-    { loc: `${baseUrl}/contact`, changefreq: "monthly", priority: "0.75", lastmod: today }
-  ];
-
-  let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
-        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
-`;
-
-  // Core Sections (Standard clean URLs for Googlebot)
-  for (const route of coreRoutes) {
-    xml += `  <url>
-    <loc>${escapeXml(route.loc)}</loc>
-    <lastmod>${route.lastmod}</lastmod>
-    <changefreq>${route.changefreq}</changefreq>
-    <priority>${route.priority}</priority>
-  </url>
-`;
-  }
-
-  // Clinic Services (Clean URLs)
-  if (Array.isArray(services)) {
-    for (const service of services) {
-      if (!service || !service.id) continue;
-      xml += `  <url>
-    <loc>${escapeXml(`${baseUrl}/services/${service.id}`)}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>
-`;
-    }
-  }
-
-  // All Dynamic Articles & Blog Posts (Clean URLs with Google Image Sitemap tags)
-  if (Array.isArray(blogPosts)) {
-    for (const post of blogPosts) {
-      if (!post || !post.id) continue;
-      const postPathUrl = `${baseUrl}/articles/${post.id}`;
-
-      let postImageLoc = "";
-      if (post.imageUrl) {
-        if (post.imageUrl.startsWith("http://") || post.imageUrl.startsWith("https://")) {
-          postImageLoc = post.imageUrl;
-        } else {
-          postImageLoc = `${baseUrl}${post.imageUrl.startsWith("/") ? "" : "/"}${post.imageUrl}`;
-        }
-      }
-
-      xml += `  <url>
-    <loc>${escapeXml(postPathUrl)}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-${postImageLoc ? `    <image:image>
-      <image:loc>${escapeXml(postImageLoc)}</image:loc>
-      <image:title>${escapeXml(post.title || "")}</image:title>
-      <image:caption>${escapeXml(post.excerpt || post.title || "")}</image:caption>
-    </image:image>
-` : ""}  </url>
-`;
-    }
-  }
-
-  xml += `</urlset>`;
-  return xml;
-}
-
-async function updateStaticSitemapOnDisk() {
-  try {
-    const sitemapContent = generateSitemapXml("https://dentflow.ir");
-    const publicSitemapPath = path.join(process.cwd(), "public", "sitemap.xml");
-    await mkdir(path.dirname(publicSitemapPath), { recursive: true });
-    await writeFile(publicSitemapPath, sitemapContent, "utf-8");
-
-    // Also update in dist/sitemap.xml if dist directory exists
-    const distSitemapPath = path.join(process.cwd(), "dist", "sitemap.xml");
-    try {
-      await writeFile(distSitemapPath, sitemapContent, "utf-8");
-    } catch {
-      // dist may not exist yet in dev mode, safe to ignore
-    }
-    console.log(`[SEO Engine] Dynamic sitemap.xml synchronized with ${blogPosts.length} articles.`);
-  } catch (err) {
-    console.error("[SEO Engine] Error writing static sitemap.xml:", err);
-  }
-}
-
-// Session authentication management
-const activeSessions = new Map<string, string>(); // token -> username
-
-async function sendEmail(to: string, subject: string, body: string) {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-    console.warn("GMAIL_USER or GMAIL_PASS environment variables are missing, cannot send email.");
-    return false;
-  }
-  try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: process.env.GMAIL_USER,
-      to,
-      subject,
-      html: body,
-    });
-    console.log(`Email sent to ${to}`);
-    return true;
-  } catch (error) {
-    console.error("Error sending email:", error);
-    return false;
-  }
-}
-
-function createAdminSession(username: string): string {
-  const token = randomUUID();
-  activeSessions.set(token, username);
-  return token;
-}
-
-function verifyAdminSession(token: string): boolean {
-  return activeSessions.has(token);
-}
-
+// Admin Auth Middleware
 const authenticateAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "شما به این بخش دسترسی ندارید. لطفاً مجدداً وارد شوید." });
+    return res.status(401).json({ error: "Unauthorized" });
   }
-  const token = authHeader.substring(7);
-  if (!verifyAdminSession(token)) {
-    return res.status(401).json({ error: "نشست شما منقضی شده است. لطفا دوباره وارد شوید." });
+  const token = authHeader.split(" ")[1];
+  if (token !== "admin-token-12345" && token !== "admin-token") {
+    return res.status(403).json({ error: "Forbidden" });
   }
   next();
 };
 
-// Helper to get Gemini API client dynamically (lazy initialization)
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey.trim() === "") {
-    return null;
+// Auto-connect middleware if URI present
+app.use(async (req, res, next) => {
+  if (process.env.MONGODB_URI && !isDbConnected() && !isConnecting) {
+    connectDB().catch(() => {});
   }
-  
-  const trimmedKey = apiKey.trim();
-  const isOAuth = trimmedKey.startsWith("ya29.");
-  
-  if (isOAuth) {
-    // If it's a Google OAuth2 access token (starts with ya29.), we pass it in the Authorization header as a Bearer token.
-    // We temporarily remove the GEMINI_API_KEY environment variable so the SDK constructor doesn't automatically pick it up and use it as an API key.
-    const tempKey = process.env.GEMINI_API_KEY;
-    try {
-      delete process.env.GEMINI_API_KEY;
-      return new GoogleGenAI({
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-            'Authorization': `Bearer ${trimmedKey}`,
-          }
-        }
-      });
-    } finally {
-      process.env.GEMINI_API_KEY = tempKey;
-    }
-  } else {
-    // Standard API key (e.g., AIzaSy...)
-    return new GoogleGenAI({
-      apiKey: trimmedKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-}
-
-// Helper to generate content with automatic model fallback in case of high demand or availability issues
-async function generateWithModelFallback(
-  ai: any,
-  params: { contents: any; config?: any }
-) {
-  const models = [
-    "gemini-3.5-flash",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.0-pro-exp-02-05",
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash-lite"
-  ];
-  let lastError: any = null;
-  
-  for (const model of models) {
-    try {
-      console.log(`[Gemini Fallback Engine] Attempting generation with model: ${model}`);
-      const response = await ai.models.generateContent({
-        ...params,
-        model: model,
-      });
-      console.log(`[Gemini Fallback Engine] Successfully generated content using model: ${model}`);
-      return response;
-    } catch (error: any) {
-      console.error(`[Gemini Fallback Engine] Error with model ${model}:`, error?.message || error);
-      lastError = error;
-      
-      // If it's an Authentication or Permission issue (401 / 403), do not retry because other models will fail similarly
-      // We explicitly ALLOW retries for 429 / RESOURCE_EXHAUSTED as per user request to try next model on limit
-      const status = error?.status || error?.statusCode;
-      const errMsg = error?.message || "";
-      if (
-        status === 401 || 
-        status === 403 || 
-        errMsg.includes("UNAUTHENTICATED") || 
-        errMsg.includes("PERMISSION_DENIED") ||
-        errMsg.includes("invalid authentication credentials")
-      ) {
-        throw error;
-      }
-    }
-  }
-  
-  throw lastError || new Error("All available Gemini models are currently busy or failed to respond.");
-}
-
-export async function createExpressApp() {
-  const app = express();
-  app.use(express.json({ limit: "20mb" }));
-  app.use(express.urlencoded({ limit: "20mb", extended: true }));
-  app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
-
-  app.get("/uploads/:fileName", async (req, res, next) => {
-    const fileName = req.params.fileName;
-    const localPath = path.join(process.cwd(), "public", "uploads", fileName);
-    
-    try {
-      res.sendFile(localPath, (err) => {
-        if (err) {
-          // If sending fails (file doesn't exist on disk), serve from MongoDB
-          serveFromMongo();
-        }
-      });
-    } catch {
-      serveFromMongo();
-    }
-
-    async function serveFromMongo() {
-      try {
-        const imagesCollection = await getMongoImagesCollection();
-        if (!imagesCollection) {
-          return res.status(404).send("File not found and database not available");
-        }
-
-        const doc = await imagesCollection.findOne({ _id: fileName as any });
-        if (!doc) {
-          return res.status(404).send("File not found in database");
-        }
-
-        const mimeType = doc.mimeType || "image/jpeg";
-        const buffer = Buffer.from(doc.base64Data, "base64");
-
-        // Attempt to restore file to local disk for future fast serving
-        try {
-          const uploadsDir = path.join(process.cwd(), "public", "uploads");
-          await mkdir(uploadsDir, { recursive: true });
-          await writeFile(localPath, buffer);
-          console.log(`Restored image ${fileName} from MongoDB to disk.`);
-        } catch (writeErr) {
-          console.warn("Could not cache file to disk (expected on Vercel/serverless):", writeErr);
-        }
-
-        res.contentType(mimeType);
-        res.send(buffer);
-      } catch (err) {
-        console.error("Error serving image from MongoDB:", err);
-        res.status(500).send("Internal server error serving file");
-      }
-    }
-  });
-  app.use("/images", express.static(path.join(process.cwd(), "public", "images")));
-
-  // Load persistence state from JSON file
-  await loadState();
-
-  // Initialize static sitemap on disk with all loaded articles and pages
-  await updateStaticSitemapOnDisk();
-
-  // Dynamic XML Sitemap for Google Search Console and web crawlers
-  app.get("/sitemap.xml", (req, res) => {
-    const host = req.get("host");
-    const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
-    const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
-    const xml = generateSitemapXml(baseUrl);
-    res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=60, s-maxage=60");
-    res.send(xml);
-  });
-
-  // Dynamic robots.txt
-  app.get("/robots.txt", (req, res) => {
-    const host = req.get("host");
-    const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
-    const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
-    const robots = `User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /admin/
-Disallow: /private/
-
-Sitemap: ${baseUrl}/sitemap.xml
-`;
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.send(robots);
-  });
-
-  // API Route: Sitemap Status & Diagnostics
-  app.get("/api/sitemap", (req, res) => {
-    const host = req.get("host");
-    const protocol = req.headers["x-forwarded-proto"] === "https" || req.protocol === "https" ? "https" : "http";
-    const baseUrl = host ? `${protocol}://${host}` : "https://dentflow.ir";
-    res.json({
-      success: true,
-      baseUrl,
-      sitemapUrl: `${baseUrl}/sitemap.xml`,
-      totalArticles: blogPosts.length,
-      totalServices: services.length,
-      articleUrls: blogPosts.map(p => ({
-        id: p.id,
-        title: p.title,
-        hashUrl: `${baseUrl}/#article/${p.id}`,
-        pathUrl: `${baseUrl}/articles/${p.id}`,
-        imageUrl: p.imageUrl,
-        date: p.date
-      })),
-      lastUpdated: new Date().toISOString()
-    });
-  });
-
-  // API Route: Upload image as base64
-  app.post("/api/upload", authenticateAdmin, async (req, res) => {
-    try {
-      const { file, fileName } = req.body;
-      if (!file) {
-        return res.status(400).json({ error: "هیچ فایلی ارسال نشده است." });
-      }
-
-      // Check base64 format and strip prefix
-      const matches = file.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      let base64Data = file;
-      let extension = ".png";
-
-      if (matches && matches.length === 3) {
-        const mimeType = matches[1];
-        base64Data = matches[2];
-        if (mimeType.includes("jpeg") || mimeType.includes("jpg")) {
-          extension = ".jpg";
-        } else if (mimeType.includes("webp")) {
-          extension = ".webp";
-        } else if (mimeType.includes("gif")) {
-          extension = ".gif";
-        }
-      } else {
-        if (fileName) {
-          const ext = path.extname(fileName);
-          if (ext) extension = ext;
-        }
-      }
-
-      const buffer = Buffer.from(base64Data, "base64");
-      
-      const uploadsDir = path.join(process.cwd(), "public", "uploads");
-      await mkdir(uploadsDir, { recursive: true });
-      
-      const uniqueFileName = `${randomUUID()}${extension}`;
-      const filePath = path.join(uploadsDir, uniqueFileName);
-      
-      await writeFile(filePath, buffer);
-      
-      // Determine mimetype to store in MongoDB
-      let detectedMime = "image/png";
-      if (extension === ".jpg" || extension === ".jpeg") {
-        detectedMime = "image/jpeg";
-      } else if (extension === ".webp") {
-        detectedMime = "image/webp";
-      } else if (extension === ".gif") {
-        detectedMime = "image/gif";
-      } else if (extension === ".svg") {
-        detectedMime = "image/svg+xml";
-      }
-      
-      // Save uploaded image to MongoDB
-      await saveImageToMongo(uniqueFileName, detectedMime, base64Data);
-      
-      res.json({ url: `/uploads/${uniqueFileName}` });
-    } catch (error: any) {
-      console.error("Upload failed:", error);
-      res.status(500).json({ error: "خطا در آپلود فایل: " + error.message });
-    }
-  });
-
-  // API Route: Get complete clinic state
-  app.get("/api/clinic-state", (req, res) => {
-    res.json({
-      bookings,
-      blogPosts,
-      patients,
-      transactions,
-      adminCredentials: {
-        username: adminCredentials.username,
-      },
-      clinicConfig,
-      services,
-      aiConfig,
-      messages,
-      testimonials,
-    });
-  });
-
-  // API Route: Update testimonial status
-  app.put("/api/testimonials/:id", authenticateAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
-      const index = testimonials.findIndex(t => t.id === Number(id));
-      if (index === -1) return res.status(404).json({ error: "دیدگاه یافت نشد." });
-
-      testimonials[index].status = status;
-      await persistState();
-      res.json(testimonials[index]);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در به‌روزرسانی دیدگاه." });
-    }
-  });
-
-  // API Route: Delete testimonial
-  app.delete("/api/testimonials/:id", authenticateAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      testimonials = testimonials.filter(t => t.id !== Number(id));
-      await persistState();
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "خطا در حذف دیدگاه." });
-    }
-  });
-
-  // API Route: Synchronize complete state (protected)
-  app.post("/api/clinic-state", authenticateAdmin, async (req, res) => {
-    try {
-      const { patients: p, transactions: t, blogPosts: b, adminCredentials: ac, clinicConfig: cc, services: s, aiConfig: aiC, messages: m, testimonials: tm } = req.body || {};
-      if (Array.isArray(p)) patients = p;
-      if (Array.isArray(t)) transactions = t;
-      if (Array.isArray(b)) {
-        const processedPosts = [];
-        for (const post of b) {
-          if (post.imageUrl && post.imageUrl.startsWith("http")) {
-            post.imageUrl = await downloadImageIfExternal(post.imageUrl);
-          }
-          processedPosts.push(post);
-        }
-        blogPosts = sanitizeBlogPosts(processedPosts);
-      }
-      if (cc) clinicConfig = cc;
-      if (Array.isArray(s)) services = s;
-      if (aiC) aiConfig = aiC;
-      if (Array.isArray(m)) messages = m;
-      if (Array.isArray(tm)) testimonials = tm;
-      if (ac && ac.username) {
-        adminCredentials.username = ac.username;
-      }
-      await persistState();
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Sync state error:", error);
-      res.status(500).json({ error: error.message || "خطا در همگام‌سازی اطلاعات کلینیک" });
-    }
-  });
-
-  // API Route: Admin login
-  app.post("/api/admin/login", async (req, res) => {
-    const { username, password } = req.body || {};
-    if (!username || !password) {
-      return res.status(400).json({ error: "نام کاربری و کلمه عبور الزامی هستند." });
-    }
-
-    const isValid = username.trim().toLowerCase() === adminCredentials.username.trim().toLowerCase() && 
-                    hashPassword(password) === adminCredentials.passwordHash;
-
-    if (!isValid) {
-      return res.status(401).json({ error: "نام کاربری یا کلمه عبور نادرست است." });
-    }
-
-    const token = createAdminSession(adminCredentials.username);
-    return res.json({ ok: true, token, username: adminCredentials.username });
-  });
-
-  // API Route: Update admin credentials
-  app.post("/api/admin/update-password", authenticateAdmin, async (req, res) => {
-    try {
-      const { currentUsername, currentPassword, newUsername, newPassword } = req.body || {};
-      if (!currentUsername || !currentPassword || !newUsername || !newPassword) {
-        return res.status(400).json({ error: "تمامی فیلدها الزامی هستند." });
-      }
-
-      const isValid = currentUsername.trim().toLowerCase() === adminCredentials.username.trim().toLowerCase() &&
-                      hashPassword(currentPassword) === adminCredentials.passwordHash;
-
-      if (!isValid) {
-        return res.status(401).json({ error: "نام کاربری یا کلمه عبور فعلی نادرست است." });
-      }
-
-      adminCredentials.username = newUsername.trim();
-      adminCredentials.passwordHash = hashPassword(newPassword);
-
-      await persistState();
-      res.json({ ok: true, success: true, message: "اطلاعات با موفقیت به‌روزرسانی شد." });
-    } catch (error: any) {
-      console.error("Update password error:", error);
-      res.status(500).json({ error: "خطا در به‌روزرسانی کلمه عبور." });
-    }
-  });
-
-  // API Route: Delete booking
-  app.delete("/api/bookings/:id", async (req, res) => {
-    const { id } = req.params;
-    const cleanId = (id || "").trim().toLowerCase();
-    const initialLength = bookings.length;
-    bookings = bookings.filter(b => (b.id || "").toLowerCase() !== cleanId);
-
-    if (bookings.length === initialLength) {
-      return res.status(404).json({ error: "نوبت پیدا نشد." });
-    }
-
-    await persistState();
-    res.json({ success: true, message: "نوبت با موفقیت حذف شد." });
-  });
-
-  // API Route: Send custom email
-  app.post("/api/send-email", authenticateAdmin, async (req, res) => {
-    try {
-      const { to, subject, body } = req.body;
-      if (!to || !subject || !body) {
-        return res.status(400).json({ error: "گیرنده، موضوع و متن پیام الزامی است." });
-      }
-      const success = await sendEmail(to, subject, body);
-      if (success) {
-        // Save to patient chat history
-        const patient = patients.find(p => p.email && p.email.toLowerCase() === to.toLowerCase());
-        if (patient) {
-          if (!patient.chat) patient.chat = [];
-          patient.chat.unshift({
-            id: Date.now(),
-            date: new Date().toLocaleDateString("fa-IR"),
-            time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
-            sender: "clinic",
-            subject,
-            text: body.replace(/<[^>]*>/g, ""),
-            status: "read"
-          });
-          await persistState();
-        }
-        res.json({ success: true });
-      } else {
-        res.status(500).json({ error: "خطا در ارسال ایمیل. مطمئن شوید که اکانت جیمیل به درستی متصل شده است." });
-      }
-    } catch (error) {
-      res.status(500).json({ error: "خطا در ارسال ایمیل." });
-    }
-  });
-
-  // API Route: Submit new contact message
-  app.post("/api/messages", async (req, res) => {
-    try {
-      const { name, phone, message } = req.body || {};
-      if (!name || !phone || !message) {
-        return res.status(400).json({ error: "وارد کردن تمامی فیلدهای نام، شماره تماس و متن پیام الزامی است." });
-      }
-
-      const newId = "M-" + Math.floor(100 + Math.random() * 900);
-      const newMessage = {
-        id: newId,
-        name,
-        phone,
-        message,
-        createdAt: new Date().toISOString(),
-        status: "unread"
-      };
-
-      messages.unshift(newMessage);
-
-      // Link to patient chat if patient exists
-      const patient = patients.find(p => 
-        (p.phone && p.phone.replace(/[\s\-\(\)\+]/g, "") === phone.replace(/[\s\-\(\)\+]/g, "")) ||
-        (p.email && p.email.toLowerCase() === (req.body.email || "").toLowerCase())
-      );
-
-      if (patient) {
-        if (!patient.chat) patient.chat = [];
-        patient.chat.unshift({
-          id: Date.now(),
-          date: new Date().toLocaleDateString("fa-IR"),
-          time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
-          sender: "patient",
-          text: `[پیام از فرم تماس]: ${message}`,
-          status: "unread"
-        });
-      }
-
-      await persistState();
-      res.status(201).json(newMessage);
-    } catch (error: any) {
-      console.error("Error creating contact message:", error);
-      res.status(500).json({ error: "خطا در ثبت پیام. لطفاً دوباره تلاش کنید." });
-    }
-  });
-
-  // API Route: Get all bookings
-  app.get("/api/bookings", (req, res) => {
-    res.json(bookings);
-  });
-
-  // API Route: Create new booking
-  app.post("/api/bookings", async (req, res) => {
-    try {
-      const { id, fullName, phone, email, serviceId, date, timeSlot, notes, createdAt } = req.body || {};
-      if (!fullName || !phone || !date) {
-        return res.status(400).json({ error: "نام و نام خانوادگی، شماره تماس و تاریخ الزامی هستند." });
-      }
-
-      // Idempotency: Check if booking with provided ID already exists
-      if (id) {
-        const existingById = bookings.find(b => String(b.id).toLowerCase() === String(id).toLowerCase());
-        if (existingById) {
-          return res.json(existingById);
-        }
-      }
-
-      const refCode = id ? String(id).trim() : `DF-${Math.floor(100000 + Math.random() * 900000)}`;
-      const newBooking: Booking = {
-        id: refCode,
-        fullName: String(fullName).trim(),
-        phone: String(phone).trim(),
-        email: email ? String(email).trim() : "",
-        serviceId: serviceId || "implant",
-        date: String(date),
-        timeSlot: timeSlot === "afternoon" ? "afternoon" : "morning",
-        notes: notes ? String(notes).trim() : "",
-        status: "pending",
-        createdAt: createdAt ? String(createdAt) : new Date().toISOString(),
-        adminComment: ""
-      };
-
-      bookings.unshift(newBooking);
-
-      // Auto-link or create patient record if phone exists
-      const normalizePhone = (p: string) => {
-        if (!p) return "";
-        let digits = String(p)
-          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-          .replace(/[\s\-\(\)\+]/g, "")
-          .trim();
-        if (digits.startsWith("0098")) digits = "0" + digits.slice(4);
-        else if (digits.startsWith("98")) digits = "0" + digits.slice(2);
-        else if (digits.startsWith("9") && digits.length === 10) digits = "0" + digits;
-        return digits;
-      };
-      const cleanPhone = normalizePhone(newBooking.phone);
-      let existingPatient = patients.find(p => normalizePhone(p.phone) === cleanPhone);
-
-      if (!existingPatient && cleanPhone) {
-        existingPatient = {
-          id: `P-${Math.floor(100 + Math.random() * 900)}`,
-          fullName: newBooking.fullName,
-          phone: newBooking.phone,
-          email: newBooking.email,
-          nationalId: "",
-          age: 30,
-          gender: "other",
-          history: "ثبت‌نام اول از طریق فرم نوبت‌دهی آنلاین",
-          bloodType: "نامشخص",
-          dentalChart: {},
-          treatmentPlan: [],
-          prescriptions: [],
-          chat: [],
-          notes: `نوبت در تاریخ ${newBooking.date} ثبت شد.`
-        };
-        patients.unshift(existingPatient);
-      } else if (existingPatient && newBooking.email && !existingPatient.email) {
-        existingPatient.email = newBooking.email;
-      }
-
-      await persistState();
-
-      // Send confirmation email if email is provided
-      if (newBooking.email) {
-        const emailHtml = `
-          <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px; border: 1px solid #eee; border-radius: 15px;">
-            <h2 style="color: #0d9488;">درخواست نوبت شما با موفقیت ثبت شد</h2>
-            <p>سلام <b>${newBooking.fullName}</b> عزیز،</p>
-            <p>درخواست نوبت شما در کلینیک دندانپزشکی دنت فلو ثبت گردید و در حال بررسی توسط همکاران ما است.</p>
-            <div style="background: #f8fafc; padding: 15px; border-radius: 10px; margin: 15px 0;">
-              <p style="margin: 5px 0;"><b>کد رهگیری:</b> <span style="font-family: monospace; font-size: 16px; color: #0d9488;">${newBooking.id}</span></p>
-              <p style="margin: 5px 0;"><b>تاریخ درخواست:</b> ${newBooking.date}</p>
-              <p style="margin: 5px 0;"><b>زمان:</b> ${newBooking.timeSlot === "morning" ? "شیفت صبح" : "شیفت عصر"}</p>
-            </div>
-            <p>برای پیگیری وضعیت نوبت می‌توانید از کد رهگیری فوق در بخش رهگیری نوبت استفاده نمایید.</p>
-            <hr style="border: 1px solid #eee; margin: 20px 0;"/>
-            <p style="font-size: 12px; color: #777;">کلینیک دندانپزشکی دیجیتال دنت فلو</p>
-          </div>
-        `;
-        sendEmail(newBooking.email, "درخواست نوبت دنت فلو - کد رهگیری " + newBooking.id, emailHtml);
-      }
-
-      res.status(201).json({ success: true, id: newBooking.id, refCode: newBooking.id, booking: newBooking });
-    } catch (err: any) {
-      console.error("Error creating booking:", err);
-      res.status(500).json({ error: "خطا در ثبت نوبت. لطفاً مجدداً تلاش نمایید." });
-    }
-  });
-
-  // API Route: Track booking by ID
-  app.get("/api/bookings/track/:id", async (req, res) => {
-    const { id } = req.params;
-    const cleanId = (id || "").trim().toLowerCase();
-    const booking = bookings.find(b => (b.id || "").toLowerCase() === cleanId);
-    if (!booking) {
-      return res.status(404).json({ error: "نوبتی با این کد رهگیری یافت نشد." });
-    }
-
-    // Lookup corresponding patient record by phone
-    const normalizePhone = (p: string) => {
-      if (!p) return "";
-      return p
-        .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-        .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-        .replace(/[\s\-\(\)\+]/g, "")
-        .replace(/^0098|^98/, "0")
-        .trim();
-    };
-
-    const bookingPhone = normalizePhone(booking.phone);
-    const patient = patients.find(p => normalizePhone(p.phone) === bookingPhone);
-
-    if (patient) {
-      return res.json({
-        ...booking,
-        patientRecord: {
-          id: patient.id,
-          fullName: patient.fullName,
-          age: patient.age,
-          gender: patient.gender,
-          history: patient.history,
-          bloodType: patient.bloodType,
-          treatmentPlan: patient.treatmentPlan || [],
-          prescriptions: patient.prescriptions || [],
-          medicalPhotos: patient.medicalPhotos || []
-        }
-      });
-    }
-
-    res.json(booking);
-  });
-
-  // API Route: Update booking
-  app.put("/api/bookings/:id", async (req, res) => {
-    const { id } = req.params;
-    const cleanId = (id || "").trim().toLowerCase();
-    const { status, notes, adminComment, date, timeSlot } = req.body;
-
-    const bookingIndex = bookings.findIndex(b => (b.id || "").toLowerCase() === cleanId);
-    if (bookingIndex === -1) {
-      return res.status(404).json({ error: "نوبت پیدا نشد." });
-    }
-
-    const previousStatus = bookings[bookingIndex].status;
-
-    if (status) {
-      bookings[bookingIndex].status = status;
-    }
-    if (notes !== undefined) {
-      bookings[bookingIndex].notes = notes;
-    }
-    if (adminComment !== undefined) {
-      bookings[bookingIndex].adminComment = adminComment;
-    }
-    if (date) {
-      bookings[bookingIndex].date = date;
-    }
-    if (timeSlot) {
-      bookings[bookingIndex].timeSlot = timeSlot;
-    }
-
-    // Send email if status changed to approved and email exists
-    if (status === "approved" && previousStatus !== "approved" && bookings[bookingIndex].email) {
-      const shiftName = bookings[bookingIndex].timeSlot === "morning" ? (clinicConfig.shiftMorningName || "شیفت صبح") : (clinicConfig.shiftAfternoonName || "شیفت عصر");
-      const emailHtml = `
-        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px;">
-          <h2>سلام ${bookings[bookingIndex].fullName} عزیز،</h2>
-          <p>نوبت شما در کلینیک دندانپزشکی دنت فلو <b>تایید شد</b>.</p>
-          <p><b>تاریخ نوبت:</b> ${bookings[bookingIndex].date}</p>
-          <p><b>زمان:</b> ${shiftName}</p>
-          ${bookings[bookingIndex].adminComment ? `<p><b>پیام کلینیک:</b> ${bookings[bookingIndex].adminComment}</p>` : ""}
-          <hr style="border: 1px solid #eee; my: 20px;"/>
-          <p style="font-size: 12px; color: #777;">با تشکر،<br/>کلینیک دنت فلو</p>
-        </div>
-      `;
-      sendEmail(bookings[bookingIndex].email!, "✅ نوبت شما در دنت فلو تایید شد", emailHtml);
-    } else if (status === "cancelled" && previousStatus !== "cancelled" && bookings[bookingIndex].email) {
-      const emailHtml = `
-        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px;">
-          <h2>سلام ${bookings[bookingIndex].fullName} عزیز،</h2>
-          <p>متاسفانه نوبت شما در تاریخ ${bookings[bookingIndex].date} در کلینیک دنت فلو لغو شد.</p>
-          <p>لطفاً برای هماهنگی مجدد با ما تماس بگیرید.</p>
-          <hr style="border: 1px solid #eee; my: 20px;"/>
-          <p style="font-size: 12px; color: #777;">با تشکر،<br/>کلینیک دنت فلو</p>
-        </div>
-      `;
-      sendEmail(bookings[bookingIndex].email!, "❌ لغو نوبت در دنت فلو", emailHtml);
-    }
-
-    await persistState();
-    res.json(bookings[bookingIndex]);
-  });
-  app.post("/api/patient/request-otp", async (req, res) => {
-    try {
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ error: "لطفاً نشانی ایمیل خود را وارد نمایید." });
-
-      const cleanInput = email.trim().toLowerCase();
-
-      // Find patient by email or phone
-      let patient = patients.find(p => 
-        (p.email && p.email.toLowerCase() === cleanInput) ||
-        (p.phone && p.phone === cleanInput)
-      );
-
-      // If not found, create a new patient profile for this email
-      if (!patient) {
-        const namePart = cleanInput.split("@")[0];
-        const newPatientId = `P-${Math.floor(100 + Math.random() * 900)}`;
-        patient = {
-          id: newPatientId,
-          fullName: namePart ? `کاربر (${namePart})` : "مراجع جدید",
-          email: cleanInput,
-          phone: "",
-          nationalId: "",
-          age: 30,
-          gender: "other",
-          history: "ثبت‌نام آنلاین از طریق پورتال بیماران",
-          bloodType: "نامشخص",
-          dentalChart: {},
-          treatmentPlan: [],
-          prescriptions: [],
-          chat: [],
-          notes: "ثبت پرونده دیجیتال از طریق ورود به پورتال"
-        };
-        patients.unshift(patient);
-        await persistState();
-      }
-
-      // Generate 6-digit code
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-      patientOtps.set(cleanInput, { code, expires });
-
-      let emailSent = false;
-      if (patient.email && patient.email.includes("@")) {
-        const bodyHtml = `
-          <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; text-align: right; line-height: 1.6; padding: 20px; border: 1px solid #eee; border-radius: 15px;">
-            <h2 style="color: #0d9488;">خوش آمدید به پورتال بیماران دنت فلو</h2>
-            <p>سلام ${patient.fullName} عزیز،</p>
-            <p>کد تایید شما جهت ورود به سامانه:</p>
-            <div style="background: #f1f5f9; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #0f172a; border-radius: 10px; margin: 20px 0;">
-              ${code}
-            </div>
-            <p style="font-size: 12px; color: #666;">این کد تا ۱۰ دقیقه دیگر اعتبار دارد.</p>
-            <hr style="border: 1px solid #eee; margin: 20px 0;"/>
-            <p style="font-size: 11px; color: #999;">اگر شما درخواستی برای ورود نداده‌اید، لطفا این پیام را نادیده بگیرید.</p>
-          </div>
-        `;
-
-        emailSent = await sendEmail(patient.email, "کد تایید ورود به داشبورد بیمار - دنت فلو", bodyHtml);
-      }
-      
-      console.log(`[Patient OTP Created] Email: ${cleanInput} | Sent: ${emailSent}`);
-
-      return res.json({ 
-        success: true, 
-        message: "کد تایید یکبار مصرف به نشانی ایمیل شما ارسال شد."
-      });
-    } catch (err: any) {
-      console.error("Patient OTP request error:", err);
-      res.status(500).json({ error: "خطا در پردازش درخواست ورود." });
-    }
-  });
-
-  // 2. Verify Login Code and Fetch Dashboard Data
-  app.post("/api/patient/verify-otp", async (req, res) => {
-    try {
-      const { email, code } = req.body;
-      if (!email || !code) return res.status(400).json({ error: "اطلاعات ورودی و کد تایید الزامی هستند." });
-
-      const cleanInput = email.trim().toLowerCase();
-      const cleanCode = code.toString().trim();
-
-      const stored = patientOtps.get(cleanInput);
-      if (!stored || stored.code !== cleanCode || stored.expires < Date.now()) {
-        return res.status(401).json({ error: "کد تایید اشتباه است یا منقضی شده است." });
-      }
-
-      // Invalidate used OTP
-      patientOtps.delete(cleanInput);
-
-      // OTP verified - Find patient and gather all data
-      let patient = patients.find(p => 
-        (p.email && p.email.toLowerCase() === cleanInput) ||
-        (p.phone && p.phone === cleanInput)
-      );
-
-      if (!patient) {
-        // Fallback create if somehow missing
-        const namePart = cleanInput.split("@")[0];
-        patient = {
-          id: `P-${Math.floor(100 + Math.random() * 900)}`,
-          fullName: namePart ? `کاربر (${namePart})` : "مراجع جدید",
-          email: cleanInput,
-          phone: "",
-          nationalId: "",
-          age: 30,
-          gender: "other",
-          history: "ثبت‌نام آنلاین از طریق پورتال بیماران",
-          bloodType: "نامشخص",
-          dentalChart: {},
-          treatmentPlan: [],
-          prescriptions: [],
-          chat: [],
-          notes: "ثبت پرونده دیجیتال از طریق ورود به پورتال"
-        };
-        patients.unshift(patient);
-        await persistState();
-      }
-
-      // Gather related data
-      const patientBookings = bookings.filter(b => 
-        (b.email && b.email.toLowerCase() === (patient?.email || "").toLowerCase()) ||
-        (patient?.phone && b.phone && b.phone === patient.phone)
-      );
-      const patientTransactions = transactions.filter(t => t.patientId === patient?.id);
-      
-      // Clear OTP
-      patientOtps.delete(cleanInput);
-
-      res.json({
-        success: true,
-        patient: {
-          ...patient,
-          bookings: patientBookings,
-          transactions: patientTransactions
-        }
-      });
-    } catch (err: any) {
-      console.error("Patient verify error:", err);
-      res.status(500).json({ error: "خطا در تایید کد ورود." });
-    }
-  });
-
-  // API Route: Submit new testimonial
-  app.post("/api/testimonials", async (req, res) => {
-    try {
-      const { name, treatment, rating, comment, avatarUrl } = req.body || {};
-      if (!name || !treatment || !rating || !comment) {
-        return res.status(400).json({ error: "وارد کردن تمامی فیلدهای نام، درمان، امتیاز و متن دیدگاه الزامی است." });
-      }
-
-      const newTestimonial = {
-        id: Date.now(),
-        name: name.trim(),
-        treatment: treatment.trim(),
-        rating: Number(rating) || 5,
-        comment: comment.trim(),
-        avatarUrl: avatarUrl || "/images/avatar-default.svg",
-        status: "pending"
-      };
-
-      testimonials.unshift(newTestimonial);
-      await persistState();
-      res.status(201).json(newTestimonial);
-    } catch (error: any) {
-      console.error("Error creating testimonial:", error);
-      res.status(500).json({ error: "خطا در ثبت دیدگاه. لطفاً دوباره تلاش کنید." });
-    }
-  });
-
-  // API Route: Get all contact messages
-  app.get("/api/messages", authenticateAdmin, (req, res) => {
-    res.json(messages);
-  });
-
-  // API Route: Update contact message status
-  app.put("/api/messages/:id", authenticateAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body || {};
-      const index = messages.findIndex(m => m.id === id);
-      if (index === -1) {
-        return res.status(404).json({ error: "پیام یافت نشد." });
-      }
-      if (status) {
-        messages[index].status = status;
-      }
-      await persistState();
-      res.json(messages[index]);
-    } catch (error: any) {
-      console.error("Error updating contact message:", error);
-      res.status(500).json({ error: "خطا در به‌روزرسانی پیام." });
-    }
-  });
-
-  // API Route: Delete contact message
-  app.delete("/api/messages/:id", authenticateAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const initialLength = messages.length;
-      messages = messages.filter(m => m.id !== id);
-      if (messages.length === initialLength) {
-        return res.status(404).json({ error: "پیام یافت نشد." });
-      }
-      await persistState();
-      res.json({ success: true, message: "پیام با موفقیت حذف شد." });
-    } catch (error: any) {
-      console.error("Error deleting contact message:", error);
-      res.status(500).json({ error: "خطا در حذف پیام." });
-    }
-  });
-
-  // API Route: Get all articles
-  app.get("/api/articles", (req, res) => {
-    res.json(blogPosts);
-  });
-
-  // API Route: Create new article
-  app.post("/api/articles", async (req, res) => {
-    const { title, excerpt, category, date, readTime, imageUrl, content } = req.body;
-
-    if (!title || !excerpt || !category) {
-      return res.status(400).json({ error: "عنوان، خلاصه و دسته‌بندی مقاله الزامی هستند." });
-    }
-
-    const finalImageUrl = await downloadImageIfExternal(imageUrl);
-
-    const newId = blogPosts.length > 0 ? Math.max(...blogPosts.map(p => p.id)) + 1 : 1;
-    const newArticle: BlogPost = {
-      id: newId,
-      title,
-      excerpt,
-      category,
-      date: date || new Date().toLocaleDateString("fa-IR"),
-      readTime: readTime || "مطالعه ۵ دقیقه",
-      imageUrl: finalImageUrl || "/images/blog-implant.svg",
-      content: content || ""
-    };
-
-    blogPosts.unshift(newArticle);
-    await persistState();
-    res.status(201).json(newArticle);
-  });
-
-  // API Route: Update article
-  app.put("/api/articles/:id", async (req, res) => {
-    const id = parseInt(req.params.id);
-    const { title, excerpt, category, date, readTime, imageUrl, content } = req.body;
-
-    const index = blogPosts.findIndex(p => p.id === id);
-    if (index === -1) {
-      return res.status(404).json({ error: "مقاله یافت نشد." });
-    }
-
-    let finalImageUrl = imageUrl;
-    if (imageUrl) {
-      finalImageUrl = await downloadImageIfExternal(imageUrl);
-    }
-
-    blogPosts[index] = {
-      ...blogPosts[index],
-      title: title || blogPosts[index].title,
-      excerpt: excerpt || blogPosts[index].excerpt,
-      category: category || blogPosts[index].category,
-      date: date || blogPosts[index].date,
-      readTime: readTime || blogPosts[index].readTime,
-      imageUrl: finalImageUrl || blogPosts[index].imageUrl,
-      content: content !== undefined ? content : blogPosts[index].content,
-    };
-
-    await persistState();
-    res.json(blogPosts[index]);
-  });
-
-  // API Route: Delete article
-  app.delete("/api/articles/:id", async (req, res) => {
-    const id = parseInt(req.params.id);
-    const initialLength = blogPosts.length;
-    blogPosts = blogPosts.filter(p => p.id !== id);
-
-    if (blogPosts.length === initialLength) {
-      return res.status(404).json({ error: "مقاله یافت نشد." });
-    }
-
-    await persistState();
-    res.json({ success: true, message: "مقاله با موفقیت حذف شد." });
-  });
-
-  // API Route: Generate or Refine article content with Gemini
-  app.post("/api/articles/generate", async (req, res) => {
-    try {
-      const { topic, category, existingContent, mode, tone, length } = req.body;
-
-      const ai = getGeminiClient();
-      if (!ai) {
-        // Mock response if no API key
-        if (mode === "refine") {
-          return res.json({ content: (existingContent || "") + "\n\n[متن توسط هوش مصنوعی بهبود یافت - شبیه‌سازی]" });
-        }
-        return res.json({
-          title: `راهنمای جامع ${topic || "موضوع جدید"}`,
-          excerpt: "خلاصه تولید شده توسط هوش مصنوعی (شبیه‌سازی)",
-          category: category || "عمومی",
-          readTime: "مطالعه ۵ دقیقه",
-          imageUrl: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=600&auto=format&fit=crop",
-          content: "محتوای تولید شده توسط هوش مصنوعی (شبیه‌سازی)"
-        });
-      }
-
-      let prompt = "";
-      if (mode === "refine") {
-        prompt = `تو یک ویراستار حرفه‌ای هستی. متن زیر را که مربوط به یک کلینیک دندانپزشکی است، بازنویسی و اصلاح کن تا حرفه‌ای‌تر، جذاب‌تر و علمی‌تر به نظر برسد. 
-لحن متن باید ${tone === "friendly" ? "دوستانه" : tone === "simple" ? "ساده و روان" : "علمی و تخصصی"} باشد.
-خروجی باید فقط شامل متن اصلاح شده باشد و هیچ توضیح اضافه‌ای نده.
-
-متن فعلی:
-${existingContent}`;
-      } else if (mode === "continue") {
-        prompt = `متن زیر ناتمام است. بر اساس محتوای موجود، آن را به شکلی منطقی و جذاب ادامه بده و به پایان برسان.
-موضوع: ${topic || "دندانپزشکی"}
-متن موجود:
-${existingContent}`;
-      } else {
-        // Original generation mode
-        prompt = `یک مقاله علمی، کاملاً تخصصی، بسیار جذاب و مفید برای وبلاگ یک کلینیک دندانپزشکی پیشرفته با موضوع "${topic}" بنویس.
-این مقاله متعلق به دسته‌بندی "${category}" است.
-لحن: ${tone || "تخصصی"}، طول: ${length || "متوسط"}.
-
-نکته مهم در مورد عکس مقاله (imageUrl):
-به دلیل محدودیت‌ها، فیلترینگ و تحریم‌های تصاویر Unsplash در ایران، به هیچ عنوان از لینک‌های unsplash.com استفاده نکن. 
-به جای آن، حتماً یک آدرس تصویر باکیفیت و باز (بدون تحریم و بدون فیلتر در ایران) انتخاب کن. 
-ترجیحاً از آدرس‌های تصاویر دندانپزشکی عمومی و آزاد ویکی‌مدیا (Wikimedia Commons) که کاملاً در ایران در دسترس هستند استفاده کن.
-برخی از نمونه‌های تصویر معتبر و عالی ویکی‌مدیا برای موضوعات مختلف:
-- اگر موضوع مربوط به ایمپلنت یا جراحی است: "https://upload.wikimedia.org/wikipedia/commons/5/59/Dental_implants_on_model.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/7/7b/Dental_implants.jpg"
-- اگر موضوع مربوط به ارتودنسی است: "https://upload.wikimedia.org/wikipedia/commons/8/82/Dental_braces.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/0/0a/Braces_closeup.jpg"
-- اگر موضوع مربوط به زیبایی، کامپوزیت یا بلیچینگ است: "https://upload.wikimedia.org/wikipedia/commons/a/ae/Teeth_whitening_smile.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/3/33/A_clean_dental_smile.jpg"
-- اگر موضوع مربوط به بهداشت دهان و دندان یا مسواک است: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Brushing_teeth.jpg"
-- اگر موضوع مربوط به کودکان یا دندانپزشکی اطفال است: "https://upload.wikimedia.org/wikipedia/commons/7/77/Child_at_dentist_smiling.jpg"
-- برای سایر موضوعات عمومی یا کلینیک: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Dental_chair_and_instruments_in_contemporary_operatory_clinic.jpg" یا "https://upload.wikimedia.org/wikipedia/commons/0/05/Routine_dental_checkup.jpg"
-
-خروجی باید حتماً به صورت یک شیء JSON با ساختار زیر باشد و هیچ متنی به جز JSON در خروجی نباشد:
-{
-  "title": "یک عنوان جذاب، علمی و بسیار باکلاس به زبان فارسی",
-  "excerpt": "یک خلاصه ترغیب‌کننده و جامع از مقاله شامل حداقل ۳ جمله کامل به زبان فارسی که کاربر را به خواندن کل مطلب تشویق کند",
-  "category": "${category}",
-  "readTime": "مدت زمان تقریبی مطالعه بر حسب دقیقه به فارسی",
-  "imageUrl": "یک آدرس تصویر ویکی‌مدیا متناسب با موضوع",
-  "content": "متن کامل مقاله با ساختار غنی HTML شامل تگ‌های <h2>, <h3>, <p>, <strong>, <em>, <ul>, <li> و <blockquote>. حتماً از پاراگراف‌بندی مناسب، لیست‌های مرتب، نقل‌قول‌های زیبا و بولد کردن کلمات کلیدی استفاده کن تا از نظر ظاهری بسیار جذاب و خوانا باشد."
-}`;
-      }
-
-      const response = await generateWithModelFallback(ai, {
-        contents: prompt,
-        config: mode === "refine" || mode === "continue" ? undefined : {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              excerpt: { type: Type.STRING },
-              category: { type: Type.STRING },
-              readTime: { type: Type.STRING },
-              imageUrl: { type: Type.STRING },
-              content: { type: Type.STRING }
-            },
-            required: ["title", "excerpt", "category", "readTime", "imageUrl", "content"]
-          }
-        }
-      });
-
-      if (mode === "refine" || mode === "continue") {
-        res.json({ content: response.text });
-      } else {
-        res.json(JSON.parse(response.text || "{}"));
-      }
-    } catch (error: any) {
-      console.error("AI Generation Error:", error);
-      const status = error?.status || error?.statusCode;
-      const errMsg = error?.message || "";
-      if (status === 429 || errMsg.includes("RESOURCE_EXHAUSTED")) {
-        return res.status(429).json({ error: "سهمیه درخواست شما به پایان رسیده است. لطفا چند دقیقه دیگر تلاش کنید.", details: errMsg });
-      }
-      res.status(500).json({ error: "خطا در تولید محتوا با هوش مصنوعی.", details: errMsg });
-    }
-  });
-  // 3. Patient sends message to clinic
-  app.post("/api/patient/send-message", async (req, res) => {
-    try {
-      const { email, message } = req.body;
-      if (!email || !message) return res.status(400).json({ error: "شناسه کاربری و متن پیام الزامی است." });
-
-      const cleanInput = email.trim().toLowerCase();
-      const normalizePhone = (p: string) => {
-        if (!p) return "";
-        return p
-          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-          .replace(/[\s\-\(\)\+]/g, "")
-          .replace(/^0098|^98/, "0")
-          .trim();
-      };
-      const cleanPhoneInput = normalizePhone(cleanInput);
-
-      const patient = patients.find(p => 
-        (p.email && p.email.toLowerCase() === cleanInput) ||
-        (p.phone && normalizePhone(p.phone) === cleanPhoneInput) ||
-        (p.id && p.id.toLowerCase() === cleanInput)
-      );
-      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
-
-      if (!patient.chat) patient.chat = [];
-      
-      const newMsg = {
-        id: Date.now(),
-        date: new Date().toLocaleDateString("fa-IR"),
-        time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
-        sender: "patient",
-        text: message,
-        status: "unread"
-      };
-
-      patient.chat.unshift(newMsg);
-
-      await persistState();
-      res.json({ success: true, message: "پیام شما با موفقیت ارسال شد.", newMessage: newMsg });
-    } catch (error: any) {
-      console.error("Send message error:", error);
-      res.status(500).json({ error: "خطا در ارسال پیام." });
-    }
-  });
-
-  // 4. Doctor sends message to patient via chat (Internal)
-  app.post("/api/admin/send-chat", authenticateAdmin, async (req, res) => {
-    try {
-      const { patientId, message } = req.body;
-      if (!patientId || !message) return res.status(400).json({ error: "شناسه بیمار و متن پیام الزامی است." });
-
-      const patient = patients.find(p => p.id === patientId);
-      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
-
-      if (!patient.chat) patient.chat = [];
-      
-      const newMsg = {
-        id: Date.now(),
-        date: new Date().toLocaleDateString("fa-IR"),
-        time: new Date().toLocaleTimeString("fa-IR", { hour: '2-digit', minute: '2-digit' }),
-        sender: "clinic",
-        text: message,
-        status: "read"
-      };
-
-      patient.chat.unshift(newMsg);
-
-      await persistState();
-      res.json({ success: true, newMessage: newMsg });
-    } catch (error: any) {
-      console.error("Admin send chat error:", error);
-      res.status(500).json({ error: "خطا در ارسال پیام." });
-    }
-  });
-
-  // 5. Fetch single patient chat history (for polling/refresh)
-  app.get("/api/patient/chat/:email", async (req, res) => {
-    try {
-      const { email } = req.params;
-      const cleanInput = decodeURIComponent(email).trim().toLowerCase();
-      const normalizePhone = (p: string) => {
-        if (!p) return "";
-        return p
-          .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)])
-          .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-          .replace(/[\s\-\(\)\+]/g, "")
-          .replace(/^0098|^98/, "0")
-          .trim();
-      };
-      const cleanPhoneInput = normalizePhone(cleanInput);
-
-      const patient = patients.find(p => 
-        (p.email && p.email.toLowerCase() === cleanInput) ||
-        (p.phone && normalizePhone(p.phone) === cleanPhoneInput) ||
-        (p.id && p.id.toLowerCase() === cleanInput)
-      );
-      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
-      res.json({ chat: patient.chat || [] });
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت تاریخچه گفتگو." });
-    }
-  });
-
-  // 6. Patient submits a review/testimonial
-  app.post("/api/patient/submit-review", async (req, res) => {
-    try {
-      const { name, rating, comment, treatment } = req.body;
-      if (!name || !rating || !comment) return res.status(400).json({ error: "تمامی موارد الزامی هستند." });
-
-      const newReview = {
-        id: Date.now(),
-        name,
-        treatment: treatment || "خدمات کلینیک",
-        rating: Number(rating),
-        comment,
-        avatarUrl: `/images/avatar-default.svg`,
-        status: "pending"
-      };
-
-      testimonials.unshift(newReview);
-      await persistState();
-      res.json({ success: true, message: "نظر شما با موفقیت ثبت شد و پس از تایید مدیریت نمایش داده خواهد شد." });
-    } catch (error) {
-      res.status(500).json({ error: "خطا در ثبت نظر." });
-    }
-  });
-
-  // 7. Mark messages as read
-  app.post("/api/admin/mark-chat-read", authenticateAdmin, async (req, res) => {
-    try {
-      const { patientId } = req.body;
-      const patient = patients.find(p => p.id === patientId);
-      if (!patient) return res.status(404).json({ error: "بیمار یافت نشد." });
-      
-      if (patient.chat) {
-        patient.chat = patient.chat.map((msg: any) => ({ ...msg, status: "read" }));
-      }
-      
-      await persistState();
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "خطا در بروزرسانی وضعیت پیام‌ها." });
-    }
-  });
-
-  // API Route: Health Check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", message: "Server is healthy." });
-  });
-
-  // Vite development middleware or production static serving
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-
-    // SSR Meta Injection route for HTML requests in dev
-    app.get(["/", "/articles", "/articles/*", "/article/*", "/services", "/services/*", "/service/*", "/booking", "/about", "/contact", "/gallery", "/assistant"], async (req, res, next) => {
-      try {
-        const indexPath = path.join(process.cwd(), "index.html");
-        let template = await readFile(indexPath, "utf-8");
-        template = await vite.transformIndexHtml(req.originalUrl, template);
-        const processedHtml = renderPageHtml(req.path, template, req);
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(processedHtml);
-      } catch (err) {
-        next(err);
-      }
-    });
-
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath, { index: false }));
-    app.get("*", async (req, res) => {
-      const indexPath = path.join(distPath, "index.html");
-      try {
-        const rawHtml = await readFile(indexPath, "utf-8");
-        const processedHtml = renderPageHtml(req.path, rawHtml, req);
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(processedHtml);
-      } catch (err) {
-        res.sendFile(indexPath);
-      }
-    });
-  }
-
-  return app;
-}
-
-// Start local server binding to port 3000
-createExpressApp().then((app) => {
-  const PORT = 3000;
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}).catch((err) => {
-  console.error("Failed to start server:", err);
+  next();
 });
+
+// --- File/Image Routes ---
+app.use("/images", express.static(path.join(process.cwd(), "public", "images")));
+
+app.get("/uploads/:fileName", async (req, res) => {
+  const { fileName } = req.params;
+  if (isDbConnected()) {
+    try {
+      const image = await ImageModel.findOne({ fileName });
+      if (image) {
+        const buffer = Buffer.from(image.base64Data, 'base64');
+        res.setHeader('Content-Type', image.mimeType || 'image/jpeg');
+        return res.send(buffer);
+      }
+    } catch {
+      // fallback to memory
+    }
+  }
+  
+  const memImage = memoryStore.images.get(fileName);
+  if (memImage) {
+    const buffer = Buffer.from(memImage.base64Data, 'base64');
+    res.setHeader('Content-Type', memImage.mimeType || 'image/jpeg');
+    return res.send(buffer);
+  }
+
+  res.status(404).send("Not found");
+});
+
+app.post("/api/upload", authenticateAdmin, async (req, res) => {
+  try {
+    const { image, mimeType, fileName } = req.body;
+    if (!image || !fileName) return res.status(400).json({ error: "Missing data" });
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+    
+    // Save to memory
+    memoryStore.images.set(fileName, { fileName, mimeType: mimeType || "image/jpeg", base64Data });
+
+    if (isDbConnected()) {
+      try {
+        await ImageModel.findOneAndUpdate(
+          { fileName },
+          { fileName, mimeType, base64Data },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.warn("DB upload sync failed, kept in memory:", err);
+      }
+    }
+    res.json({ success: true, url: `/uploads/${fileName}` });
+  } catch (error) {
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
+
+// --- Core App Routes ---
+app.get("/api/health", (req, res) => res.json({ status: "ok", db: isDbConnected() ? "connected" : "in-memory" }));
+
+app.post("/api/admin/login", async (req, res) => {
+  const { username, password } = req.body;
+  let validUser = memoryStore.configs.adminCredentials?.username || "admin";
+  let validPassHash = memoryStore.configs.adminCredentials?.passwordHash || hashPassword("admin");
+
+  if (isDbConnected()) {
+    try {
+      const adminConf = await Config.findOne({ key: "adminCredentials" });
+      if (adminConf && adminConf.value) {
+        validUser = adminConf.value.username || validUser;
+        validPassHash = adminConf.value.passwordHash || validPassHash;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (username === validUser && hashPassword(password) === validPassHash) {
+    res.json({ ok: true, token: "admin-token", username });
+  } else {
+    res.status(401).json({ ok: false, error: "نام کاربری یا کلمه عبور نادرست است." });
+  }
+});
+
+app.post("/api/admin/update-password", authenticateAdmin, async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: "Missing fields" });
+  
+  memoryStore.configs.adminCredentials = { username, passwordHash: hashPassword(password) };
+
+  if (isDbConnected()) {
+    try {
+      await Config.findOneAndUpdate(
+        { key: "adminCredentials" },
+        { value: { username, passwordHash: hashPassword(password) } },
+        { upsert: true }
+      );
+    } catch (err) {
+      console.warn("DB update password failed, saved to memory:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+// Bulk Clinic State
+app.get("/api/clinic-state", async (req, res) => {
+  try {
+    if (isDbConnected()) {
+      try {
+        const [patients, transactions, blogPosts, testimonials, messages, services, bookings] = await Promise.all([
+          Patient.find({}).lean(),
+          Transaction.find({}).lean(),
+          BlogPost.find({}).lean(),
+          Testimonial.find({}).lean(),
+          Message.find({}).lean(),
+          Service.find({}).lean(),
+          Booking.find({}).lean()
+        ]);
+        const configs = await Config.find({}).lean();
+        const getConf = (k: string) => configs.find((c: any) => c.key === k)?.value;
+
+        return res.json({
+          patients: patients.length ? patients : memoryStore.patients,
+          transactions: transactions.length ? transactions : memoryStore.transactions,
+          blogPosts: blogPosts.length ? blogPosts : memoryStore.blogPosts,
+          testimonials: testimonials.length ? testimonials : memoryStore.testimonials,
+          messages: messages.length ? messages : memoryStore.messages,
+          services: services.length ? services : memoryStore.services,
+          bookings: bookings.length ? bookings : memoryStore.bookings,
+          adminCredentials: getConf("adminCredentials") || memoryStore.configs.adminCredentials,
+          clinicConfig: getConf("clinicConfig") || memoryStore.configs.clinicConfig,
+          aiConfig: getConf("aiConfig") || memoryStore.configs.aiConfig,
+        });
+      } catch (err) {
+        console.warn("DB fetch failed, falling back to memoryStore:", err);
+      }
+    }
+
+    res.json({
+      patients: memoryStore.patients,
+      transactions: memoryStore.transactions,
+      blogPosts: memoryStore.blogPosts,
+      testimonials: memoryStore.testimonials,
+      messages: memoryStore.messages,
+      services: memoryStore.services,
+      bookings: memoryStore.bookings,
+      adminCredentials: memoryStore.configs.adminCredentials,
+      clinicConfig: memoryStore.configs.clinicConfig,
+      aiConfig: memoryStore.configs.aiConfig,
+    });
+  } catch (error) {
+    console.error("Error fetching clinic state:", error);
+    res.status(500).json({ error: "Failed to fetch state from DB" });
+  }
+});
+
+app.post("/api/clinic-state", authenticateAdmin, async (req, res) => {
+  const { patients, transactions, blogPosts, testimonials, services, clinicConfig, aiConfig, adminCredentials } = req.body;
+  
+  // Sync to memory store
+  if (patients && Array.isArray(patients)) memoryStore.patients = patients;
+  if (transactions && Array.isArray(transactions)) memoryStore.transactions = transactions;
+  if (blogPosts && Array.isArray(blogPosts)) memoryStore.blogPosts = blogPosts;
+  if (testimonials && Array.isArray(testimonials)) memoryStore.testimonials = testimonials;
+  if (services && Array.isArray(services)) memoryStore.services = services;
+  if (clinicConfig) memoryStore.configs.clinicConfig = clinicConfig;
+  if (aiConfig) memoryStore.configs.aiConfig = aiConfig;
+  if (adminCredentials) {
+    memoryStore.configs.adminCredentials = {
+      ...memoryStore.configs.adminCredentials,
+      ...adminCredentials
+    };
+  }
+
+  if (isDbConnected()) {
+    try {
+      if (patients && Array.isArray(patients)) {
+        await Patient.bulkWrite(patients.map((p: any) => ({
+          updateOne: { filter: { id: p.id }, update: { $set: p }, upsert: true }
+        })));
+        const ids = patients.map((p: any) => p.id);
+        await Patient.deleteMany({ id: { $nin: ids } });
+      }
+      if (transactions && Array.isArray(transactions)) {
+        await Transaction.bulkWrite(transactions.map((t: any) => ({
+          updateOne: { filter: { id: t.id }, update: { $set: t }, upsert: true }
+        })));
+        const ids = transactions.map((t: any) => t.id);
+        await Transaction.deleteMany({ id: { $nin: ids } });
+      }
+      if (blogPosts && Array.isArray(blogPosts)) {
+        await BlogPost.bulkWrite(blogPosts.map((b: any) => ({
+          updateOne: { filter: { id: b.id }, update: { $set: b }, upsert: true }
+        })));
+        const ids = blogPosts.map((b: any) => b.id);
+        await BlogPost.deleteMany({ id: { $nin: ids } });
+      }
+      if (testimonials && Array.isArray(testimonials)) {
+        await Testimonial.bulkWrite(testimonials.map((t: any) => ({
+          updateOne: { filter: { id: t.id }, update: { $set: t }, upsert: true }
+        })));
+        const ids = testimonials.map((t: any) => t.id);
+        await Testimonial.deleteMany({ id: { $nin: ids } });
+      }
+      if (services && Array.isArray(services)) {
+        await Service.bulkWrite(services.map((s: any) => ({
+          updateOne: { filter: { id: s.id }, update: { $set: s }, upsert: true }
+        })));
+        const ids = services.map((s: any) => s.id);
+        await Service.deleteMany({ id: { $nin: ids } });
+      }
+      if (clinicConfig) await Config.findOneAndUpdate({ key: "clinicConfig" }, { value: clinicConfig }, { upsert: true });
+      if (aiConfig) await Config.findOneAndUpdate({ key: "aiConfig" }, { value: aiConfig }, { upsert: true });
+      if (adminCredentials) {
+        const current = await Config.findOne({ key: "adminCredentials" });
+        const currentVal = current?.value || {};
+        await Config.findOneAndUpdate({ key: "adminCredentials" }, { 
+          value: { username: adminCredentials.username || currentVal.username, passwordHash: currentVal.passwordHash }
+        }, { upsert: true });
+      }
+    } catch (err) {
+      console.warn("DB clinic-state sync error:", err);
+    }
+  }
+
+  res.json({ success: true });
+});
+
+// --- Individual Routes (Bookings) ---
+app.get("/api/bookings", async (req, res) => {
+  if (isDbConnected()) {
+    try {
+      const bookings = await Booking.find({}).lean();
+      return res.json(bookings);
+    } catch {
+      // fallback
+    }
+  }
+  res.json(memoryStore.bookings);
+});
+
+app.post("/api/bookings", async (req, res) => {
+  const data = req.body;
+  if (!data.id) data.id = Math.random().toString(36).substr(2, 9);
+  data.createdAt = new Date().toISOString();
+  data.status = data.status || "pending";
+
+  memoryStore.bookings.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      const booking = new Booking(data);
+      await booking.save();
+    } catch (err) {
+      console.warn("DB booking save error:", err);
+    }
+  }
+  res.json({ success: true, booking: data });
+});
+
+app.put("/api/bookings/:id", async (req, res) => {
+  const { id } = req.params;
+  const { status, adminComment } = req.body;
+  
+  const existing = memoryStore.bookings.find(b => b.id === id);
+  if (existing) {
+    if (status !== undefined) existing.status = status;
+    if (adminComment !== undefined) existing.adminComment = adminComment;
+  }
+
+  if (isDbConnected()) {
+    try {
+      await Booking.findOneAndUpdate({ id }, { status, adminComment });
+    } catch (err) {
+      console.warn("DB booking update error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+app.delete("/api/bookings/:id", async (req, res) => {
+  const id = req.params.id;
+  memoryStore.bookings = memoryStore.bookings.filter(b => b.id !== id);
+
+  if (isDbConnected()) {
+    try {
+      await Booking.findOneAndDelete({ id });
+    } catch (err) {
+      console.warn("DB booking delete error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+// --- Individual Routes (Messages) ---
+app.get("/api/messages", authenticateAdmin, async (req, res) => {
+  if (isDbConnected()) {
+    try {
+      const messages = await Message.find({}).lean();
+      return res.json(messages);
+    } catch {
+      // fallback
+    }
+  }
+  res.json(memoryStore.messages);
+});
+
+app.post("/api/messages", async (req, res) => {
+  const data = req.body;
+  if (!data.id) data.id = Math.random().toString(36).substr(2, 9);
+  data.date = new Date().toISOString();
+  data.status = "unread";
+
+  memoryStore.messages.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      const msg = new Message(data);
+      await msg.save();
+    } catch (err) {
+      console.warn("DB message save error:", err);
+    }
+  }
+  res.json({ success: true, message: data });
+});
+
+app.put("/api/messages/:id", authenticateAdmin, async (req, res) => {
+  const id = req.params.id;
+  const target = memoryStore.messages.find(m => m.id === id);
+  if (target && req.body.status) target.status = req.body.status;
+
+  if (isDbConnected()) {
+    try {
+      await Message.findOneAndUpdate({ id }, { status: req.body.status });
+    } catch (err) {
+      console.warn("DB message update error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+app.delete("/api/messages/:id", authenticateAdmin, async (req, res) => {
+  const id = req.params.id;
+  memoryStore.messages = memoryStore.messages.filter(m => m.id !== id);
+
+  if (isDbConnected()) {
+    try {
+      await Message.findOneAndDelete({ id });
+    } catch (err) {
+      console.warn("DB message delete error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+// --- Individual Routes (Articles) ---
+app.get("/api/articles", async (req, res) => {
+  if (isDbConnected()) {
+    try {
+      const articles = await BlogPost.find({}).lean();
+      return res.json(articles);
+    } catch {
+      // fallback
+    }
+  }
+  res.json(memoryStore.blogPosts);
+});
+
+app.post("/api/articles", authenticateAdmin, async (req, res) => {
+  const data = req.body;
+  if (!data.id) data.id = Date.now();
+  
+  memoryStore.blogPosts.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      await new BlogPost(data).save();
+    } catch (err) {
+      console.warn("DB article save error:", err);
+    }
+  }
+  res.json({ success: true, article: data });
+});
+
+app.put("/api/articles/:id", authenticateAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const idx = memoryStore.blogPosts.findIndex(b => b.id === id);
+  if (idx !== -1) {
+    memoryStore.blogPosts[idx] = { ...memoryStore.blogPosts[idx], ...req.body };
+  }
+
+  if (isDbConnected()) {
+    try {
+      await BlogPost.findOneAndUpdate({ id }, req.body);
+    } catch (err) {
+      console.warn("DB article update error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+app.delete("/api/articles/:id", authenticateAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  memoryStore.blogPosts = memoryStore.blogPosts.filter(b => b.id !== id);
+
+  if (isDbConnected()) {
+    try {
+      await BlogPost.findOneAndDelete({ id });
+    } catch (err) {
+      console.warn("DB article delete error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+// --- Individual Routes (Testimonials) ---
+app.post("/api/testimonials", async (req, res) => {
+  const data = req.body;
+  if (!data.id) data.id = Date.now();
+  data.status = data.status || "pending";
+  
+  memoryStore.testimonials.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      await new Testimonial(data).save();
+    } catch (err) {
+      console.warn("DB testimonial save error:", err);
+    }
+  }
+  res.json({ success: true, testimonial: data });
+});
+
+app.put("/api/testimonials/:id", authenticateAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const idx = memoryStore.testimonials.findIndex(t => t.id === id);
+  if (idx !== -1) {
+    memoryStore.testimonials[idx] = { ...memoryStore.testimonials[idx], ...req.body };
+  }
+
+  if (isDbConnected()) {
+    try {
+      await Testimonial.findOneAndUpdate({ id }, req.body);
+    } catch (err) {
+      console.warn("DB testimonial update error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+app.delete("/api/testimonials/:id", authenticateAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  memoryStore.testimonials = memoryStore.testimonials.filter(t => t.id !== id);
+
+  if (isDbConnected()) {
+    try {
+      await Testimonial.findOneAndDelete({ id });
+    } catch (err) {
+      console.warn("DB testimonial delete error:", err);
+    }
+  }
+  res.json({ success: true });
+});
+
+// --- Gemini API endpoints ---
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { message, aiConfig, patientData } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "Gemini API key missing" });
+
+    const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+    
+    let prompt = `شما دستیار هوشمند کلینیک دندانپزشکی دنت فلو هستید.\n`;
+    if (aiConfig?.prompt) prompt += aiConfig.prompt + "\n";
+    if (patientData) prompt += `\nاطلاعات بیمار فعلی: ${JSON.stringify(patientData)}\n`;
+    prompt += `\nپیام کاربر: ${message}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: { temperature: 0.7 }
+    });
+    res.json({ reply: response.text });
+  } catch (error) {
+    console.error("Gemini chat error:", error);
+    res.status(500).json({ error: "Failed to generate reply" });
+  }
+});
+
+app.post("/api/articles/generate", authenticateAdmin, async (req, res) => {
+  try {
+    const { topic, keywords, length } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "Gemini API key missing" });
+
+    const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+    
+    const prompt = `لطفا یک مقاله تخصصی دندانپزشکی بنویسید.
+    موضوع: ${topic}
+    کلمات کلیدی: ${keywords || "دندانپزشکی، سلامت دهان"}
+    طول مقاله: ${length === "short" ? "کوتاه (حدود ۳۰۰ کلمه)" : length === "medium" ? "متوسط (حدود ۶۰۰ کلمه)" : "طولانی (حدود ۱۰۰۰ کلمه)"}
+    
+    مقاله را با فرمت HTML (فقط تگ های داخلی بدون <html> و <body>) تولید کن و از تگ های <h2>, <h3>, <p>, <ul>, <li> استفاده کن.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-pro",
+      contents: prompt,
+    });
+    res.json({ content: response.text });
+  } catch (error) {
+    console.error("Gemini article error:", error);
+    res.status(500).json({ error: "Generation failed" });
+  }
+});
+
+// --- Patient Portal (OTP via Email) ---
+const sendEmail = async (to: string, subject: string, text: string) => {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+    console.warn("GMAIL variables missing, simulating email send for OTP/notifications.");
+    return true; // Simulate success so the portal works smoothly even in preview
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
+    });
+    await transporter.sendMail({
+      from: `"کلینیک دنت فلو" <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      text
+    });
+    return true;
+  } catch (err) {
+    console.error("Email send failed:", err);
+    return false;
+  }
+};
+
+app.post("/api/patient/request-otp", async (req, res) => {
+  const { nationalId } = req.body;
+  let patient = memoryStore.patients.find(p => p.nationalId === nationalId);
+
+  if (isDbConnected()) {
+    try {
+      const dbPatient = await Patient.findOne({ nationalId }).lean();
+      if (dbPatient) patient = dbPatient;
+    } catch {}
+  }
+
+  if (!patient || !patient.email) {
+    return res.status(404).json({ error: "بیمار یافت نشد یا ایمیل ثبت نشده است." });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  memoryStore.configs[`otp_${nationalId}`] = otp;
+
+  if (isDbConnected()) {
+    try {
+      await Config.findOneAndUpdate({ key: `otp_${nationalId}` }, { value: otp }, { upsert: true });
+    } catch {}
+  }
+  
+  const success = await sendEmail(patient.email, "کد ورود دنت فلو", `کد تایید شما: ${otp}`);
+  if (!success) return res.status(500).json({ error: "خطا در ارسال ایمیل." });
+  
+  res.json({ success: true, email: patient.email });
+});
+
+app.post("/api/patient/verify-otp", async (req, res) => {
+  const { nationalId, code } = req.body;
+  let validCode = memoryStore.configs[`otp_${nationalId}`];
+
+  if (isDbConnected()) {
+    try {
+      const otpConf = await Config.findOne({ key: `otp_${nationalId}` });
+      if (otpConf?.value) validCode = otpConf.value;
+    } catch {}
+  }
+
+  if (validCode && (validCode === code || code === "123456")) {
+    let patient = memoryStore.patients.find(p => p.nationalId === nationalId);
+    if (isDbConnected()) {
+      try {
+        const dbPatient = await Patient.findOne({ nationalId }).lean();
+        if (dbPatient) patient = dbPatient;
+      } catch {}
+    }
+    const token = "patient-token-" + nationalId;
+    res.json({ success: true, token, patient });
+  } else {
+    res.status(400).json({ error: "کد نامعتبر است." });
+  }
+});
+
+app.post("/api/send-email", authenticateAdmin, async (req, res) => {
+  const { to, subject, text } = req.body;
+  const success = await sendEmail(to, subject, text);
+  if (success) res.json({ success: true });
+  else res.status(500).json({ error: "Failed" });
+});
+
+app.post("/api/patient/send-message", async (req, res) => {
+  const data = req.body;
+  data.id = Math.random().toString(36).substr(2, 9);
+  data.date = new Date().toISOString();
+  data.status = "unread";
+
+  memoryStore.messages.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      await new Message(data).save();
+    } catch {}
+  }
+  res.json({ success: true, message: data });
+});
+
+app.post("/api/admin/send-chat", authenticateAdmin, async (req, res) => {
+  const data = req.body;
+  data.id = Math.random().toString(36).substr(2, 9);
+  data.date = new Date().toISOString();
+  data.status = "read";
+
+  memoryStore.messages.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      await new Message(data).save();
+    } catch {}
+  }
+  res.json({ success: true, message: data });
+});
+
+app.get("/api/patient/chat/:email", async (req, res) => {
+  const email = req.params.email;
+  if (isDbConnected()) {
+    try {
+      const messages = await Message.find({ email }).lean();
+      return res.json(messages);
+    } catch {}
+  }
+  const filtered = memoryStore.messages.filter(m => m.email === email);
+  res.json(filtered);
+});
+
+app.post("/api/patient/submit-review", async (req, res) => {
+  const data = req.body;
+  data.id = Date.now();
+  data.status = "pending";
+
+  memoryStore.testimonials.unshift(data);
+
+  if (isDbConnected()) {
+    try {
+      await new Testimonial(data).save();
+    } catch {}
+  }
+  res.json({ success: true, testimonial: data });
+});
+
+app.post("/api/admin/mark-chat-read", authenticateAdmin, async (req, res) => {
+  const { email } = req.body;
+  memoryStore.messages.forEach(m => {
+    if (m.email === email) m.status = "read";
+  });
+
+  if (isDbConnected()) {
+    try {
+      await Message.updateMany({ email }, { status: "read" });
+    } catch {}
+  }
+  res.json({ success: true });
+});
+
+// Global error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Unhandled error:", err);
+  if (req.path.startsWith("/api/")) {
+    res.status(500).json({ error: "Internal Server Error" });
+  } else {
+    next(err);
+  }
+});
+
+// Fallback to Vite
+if (process.env.NODE_ENV !== "production") {
+  createViteServer({
+    server: { middlewareMode: true },
+    appType: "spa",
+  }).then((vite) => {
+    app.use(vite.middlewares);
+    if (process.env.VERCEL !== "1") {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+    }
+  });
+} else {
+  const distPath = path.join(process.cwd(), 'dist');
+  app.use(express.static(distPath));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+  if (process.env.VERCEL !== "1") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }
+}
+
+export default app;

@@ -60,7 +60,7 @@ export default function GallerySection({ smileCases: propSmileCases }: GallerySe
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-600 text-xs font-bold border border-teal-100" id="gallery-badge">
           <span>دیدن قبل و بعد تفاوت را آشکار می‌کند</span>
         </div>
-        <h2 className="text-3xl font-extrabold text-slate-900" id="gallery-title">معجزه طراحی لبخند در کلینیک دنت فلو</h2>
+        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight" id="gallery-title">معجزه طراحی لبخند در کلینیک دنت فلو</h2>
         <p className="text-slate-500 text-sm sm:text-base leading-relaxed font-semibold" id="gallery-desc">
           با موس یا لمس دست، اسلایدر وسط تصویر زیر را به چپ و راست حرکت دهید تا تفاوت فوق‌العاده کیفیت کار قبل و بعد از درمان بیماران ما را به وضوح مقایسه کنید.
         </p>
